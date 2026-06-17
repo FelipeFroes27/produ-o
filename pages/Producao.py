@@ -1043,6 +1043,7 @@ with nav_4:
     if st.button("Atualizar", key="atualizar_ordens", use_container_width=True):
         carregar_usuarios.clear()
         carregar_ordens.clear()
+        carregar_historico.clear()
         st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 
