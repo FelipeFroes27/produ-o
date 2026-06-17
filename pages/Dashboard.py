@@ -107,12 +107,14 @@ def aplicar_estilo():
         }
 
         .side-title {
-            margin: 0 0 8px 0;
+            margin: 0 0 10px 0;
             color: #000000;
-            font-size: 16px;
-            line-height: 1.12;
+            font-size: 18px;
+            line-height: 1.05;
             font-weight: 900;
-            overflow-wrap: anywhere;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .side-label {
@@ -1705,7 +1707,7 @@ lateral, graficos = st.columns([1.28, 6.72], gap="small", vertical_alignment="to
 with lateral:
     with st.container(key="dashboard_lateral"):
         st.markdown(
-            '<div class="side-title">&#127981; Dashboard<br>Produ&ccedil;&atilde;o</div>',
+            '<div class="side-title">&#127981; Dashboard Produ&ccedil;&atilde;o</div>',
             unsafe_allow_html=True,
         )
         if st.button("Atualizar dados", key="dashboard_atualizar_dados", use_container_width=True):
