@@ -314,6 +314,22 @@ def aplicar_estilo():
             white-space: nowrap;
         }
 
+        .duplicate-alert {
+            margin-top: 9px;
+            display: inline-flex;
+            align-items: center;
+            border: 2px solid #000000;
+            border-radius: 8px;
+            background: #ffe3e3;
+            color: #000000;
+            padding: 7px 9px;
+            font-size: 12px;
+            line-height: 1.2;
+            font-weight: 900;
+            max-width: 100%;
+            white-space: normal;
+        }
+
         .order-number {
             color: #000000;
             font-size: 24px;
@@ -707,6 +723,25 @@ def marcar_ordens_em_andamento(ordens, historico):
     return ordens
 
 
+def marcar_ordens_duplicadas(ordens):
+    ordens = ordens.copy()
+    ordens["DUPLICADA_PROGRAMACAO"] = False
+    ordens["QTD_DUPLICADAS_PROGRAMACAO"] = 1
+    if ordens.empty:
+        return ordens
+
+    chaves = ["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO", "USUARIO_RESPONSAVEL"]
+    for coluna in chaves:
+        if coluna not in ordens.columns:
+            return ordens
+
+    chave_normalizada = ordens[chaves].fillna("").astype(str).apply(lambda coluna: coluna.str.strip().str.upper())
+    contagem = chave_normalizada.groupby(chaves, dropna=False).transform("size").iloc[:, 0]
+    ordens["DUPLICADA_PROGRAMACAO"] = contagem > 1
+    ordens["QTD_DUPLICADAS_PROGRAMACAO"] = contagem
+    return ordens
+
+
 def render_ordem_card(linha, ordens_usuario):
     chave = f"{linha['ABA_ORIGEM']}|{linha['LINHA_PLANILHA']}"
     chave_css = f"{origem_chave(linha['ABA_ORIGEM'])}_{linha['LINHA_PLANILHA']}"
@@ -716,6 +751,8 @@ def render_ordem_card(linha, ordens_usuario):
     codigo = str(linha["COD_PRODUTO"]) or "Sem codigo"
     status = str(linha["STATUS"]) or "Sem status"
     em_andamento = bool(linha.get("EM_ANDAMENTO", False))
+    duplicada = bool(linha.get("DUPLICADA_PROGRAMACAO", False))
+    qtd_duplicadas = int(linha.get("QTD_DUPLICADAS_PROGRAMACAO", 1) or 1)
     badges = [
         f'<span class="order-badge">Qtd. {escape(numero(linha["QUANTIDADE_NUM"]))}</span>',
         f'<span class="order-badge">Realizado {escape(numero(linha["REALIZADO_NUM"]))}</span>',
@@ -724,6 +761,11 @@ def render_ordem_card(linha, ordens_usuario):
     if em_andamento:
         badges.append('<span class="order-badge">Em andamento</span>')
     badges_html = "".join(badges)
+    alerta_duplicidade = (
+        f'<div class="duplicate-alert">Esta ordem esta em {qtd_duplicadas} linhas na programacao. Corrija a planilha para liberar inicio/conclusao.</div>'
+        if duplicada
+        else ""
+    )
     aplicar_estilo_card(key_card, cor_risco(linha))
     with st.container(border=True, key=key_card):
         st.markdown(f'<span class="{classe_risco(linha)}"></span>', unsafe_allow_html=True)
@@ -740,6 +782,7 @@ def render_ordem_card(linha, ordens_usuario):
                     <div class="order-badges">
                         {badges_html}
                     </div>
+                    {alerta_duplicidade}
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -762,7 +805,7 @@ def render_ordem_card(linha, ordens_usuario):
                 key_inicio = f"inicio_{chave_css}"
                 aplicar_icone_botao(key_inicio, ICONES_BOTOES["inicio"])
                 st.markdown('<div class="start-button">', unsafe_allow_html=True)
-                if st.button("Iniciar", key=key_inicio, help="Registrar inicio da ordem"):
+                if st.button("Iniciar", key=key_inicio, help="Corrija a duplicidade na programacao para iniciar." if duplicada else "Registrar inicio da ordem", disabled=duplicada):
                     try:
                         lancar_inicio_ordem(linha)
                     except Exception as exc:
@@ -781,7 +824,7 @@ def render_ordem_card(linha, ordens_usuario):
                 key_conclusao = f"conclusao_{chave_css}"
                 aplicar_icone_botao(key_conclusao, ICONES_BOTOES["conclusao"])
                 st.markdown('<div class="finish-button">', unsafe_allow_html=True)
-                if st.button("Concluir", key=key_conclusao, help="Concluir ordem"):
+                if st.button("Concluir", key=key_conclusao, help="Corrija a duplicidade na programacao para concluir." if duplicada else "Concluir ordem", disabled=duplicada):
                     modal_conclusao(linha, ordens_usuario)
                 st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1054,6 +1097,7 @@ ordens_pendentes = ordens[
     & (ordens["DATA_PRIORIDADE"].notna())
     & (ordens["OP"].astype(str).str.strip() != "")
 ].copy()
+ordens_pendentes = marcar_ordens_duplicadas(ordens_pendentes)
 ordens_pendentes = ordenar_demanda(ordens_pendentes)
 
 k1, k2, k3, k4 = st.columns(4)
