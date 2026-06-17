@@ -1,0 +1,7 @@
+venv/
+.streamlit/secrets.toml
+__pycache__/
+utils/__pycache__/
+pages/__pycache__/
+streamlit.log
+streamlit.err.log
