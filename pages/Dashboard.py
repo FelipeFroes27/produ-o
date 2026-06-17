@@ -191,6 +191,13 @@ def aplicar_estilo():
         div[data-testid="stHorizontalBlock"],
         div[data-testid="stVerticalBlock"] {
             gap: var(--dashboard-gap) !important;
+            column-gap: var(--dashboard-gap) !important;
+            row-gap: var(--dashboard-gap) !important;
+        }
+
+        div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
         }
 
         .dashboard-row-gap {
@@ -744,6 +751,14 @@ def grafico_pizza_base(fig):
 
 
 def render_chart(titulo, key, fig=None, vazio="Sem dados para este grafico.", travado=False):
+    components.html(
+        montar_chart_html(titulo, fig=fig, vazio=vazio, travado=travado),
+        height=368,
+        scrolling=False,
+    )
+
+
+def montar_chart_html(titulo, fig=None, vazio="Sem dados para este grafico.", travado=False):
     if fig is None:
         corpo = f'<div class="empty-chart">{vazio}</div>'
     else:
@@ -752,14 +767,51 @@ def render_chart(titulo, key, fig=None, vazio="Sem dados para este grafico.", tr
             config.update({"staticPlot": True, "scrollZoom": False, "doubleClick": False})
         corpo = fig.to_html(include_plotlyjs="cdn", full_html=False, config=config)
 
-    components.html(
-        f"""
-        <div style="border:2px solid #000000;border-radius:8px;background:#ffffff;padding:10px 12px 6px 12px;height:360px;box-sizing:border-box;overflow:hidden;font-family:Arial,sans-serif;">
+    return f"""
+        <div class="dashboard-card" style="border:2px solid #000000;border-radius:8px;background:#ffffff;padding:10px 12px 6px 12px;height:360px;box-sizing:border-box;overflow:hidden;font-family:Arial,sans-serif;">
             <div style="font-size:14px;font-weight:900;color:#000000;margin:0 0 5px 0;line-height:1.1;">{titulo}</div>
             <div style="height:323px;">{corpo}</div>
         </div>
-        """,
-        height=368,
+        """
+
+
+def render_dashboard_grid(cards):
+    grid_css = """
+        <style>
+            * { box-sizing: border-box; }
+            body {
+                margin: 0;
+                font-family: Arial, sans-serif;
+                color: #000;
+                background: #fff;
+            }
+            .dashboard-grid {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: .3cm;
+                width: 100%;
+                align-items: stretch;
+            }
+            .dashboard-card {
+                width: 100%;
+                margin: 0;
+            }
+            .empty-chart {
+                height: 293px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: #333;
+                font-size: 12px;
+                line-height: 1.25;
+                text-align: center;
+                padding: 0 34px;
+            }
+        </style>
+        """
+    components.html(
+        f"{grid_css}<div class=\"dashboard-grid\">{''.join(cards)}</div>",
+        height=1112,
         scrolling=False,
     )
 
@@ -776,9 +828,12 @@ def ordem_usuarios(df, coluna_usuario):
 
 
 def render_ranking_produzido(historico):
+    components.html(montar_ranking_produzido_html(historico), height=368, scrolling=False)
+
+
+def montar_ranking_produzido_html(historico):
     if historico.empty:
-        render_chart("Ranking produzido", "chart_atrasadas_usuario", vazio="Aguardando lancamentos.")
-        return
+        return montar_chart_html("Ranking produzido", vazio="Aguardando lancamentos.")
 
     ranking = (
         historico.groupby("USUARIO_RESPONSAVEL", as_index=False)
@@ -786,8 +841,7 @@ def render_ranking_produzido(historico):
         .sort_values("Produzido", ascending=False)
     )
     if ranking.empty:
-        render_chart("Ranking produzido", "chart_atrasadas_usuario", vazio="Aguardando lancamentos.")
-        return
+        return montar_chart_html("Ranking produzido", vazio="Aguardando lancamentos.")
 
     maior_valor = max(float(ranking["Produzido"].max()), 1)
     cores = ["#f7d154", "#d7dce2", "#d89b63", "#6fb6ff", "#89d47f", "#ff8f70", "#b8a3ff"]
@@ -815,12 +869,11 @@ def render_ranking_produzido(historico):
         )
 
     corpo = "".join(itens)
-    components.html(
-        f"""
+    return f"""
         <style>
             * {{ box-sizing: border-box; }}
             body {{ margin: 0; font-family: Arial, sans-serif; color: #000; }}
-            .card {{
+            .ranking-card {{
                 border: 2px solid #000;
                 border-radius: 8px;
                 background: #fff;
@@ -828,7 +881,7 @@ def render_ranking_produzido(historico):
                 padding: 10px 12px 9px 12px;
                 overflow: hidden;
             }}
-            .title {{
+            .ranking-title {{
                 font-size: 14px;
                 font-weight: 900;
                 margin: 0 0 9px 0;
@@ -894,20 +947,20 @@ def render_ranking_produzido(historico):
             .rank-track {{ height: 7px; border: 1.5px solid #000; border-radius: 999px; overflow: hidden; background: #fff; }}
             .rank-fill {{ height: 100%; border-right: 1.5px solid #000; }}
         </style>
-        <div class="card">
-            <div class="title">Ranking produzido</div>
+        <div class="dashboard-card ranking-card">
+            <div class="ranking-title">Ranking produzido</div>
             <div class="rank-list">{corpo}</div>
         </div>
-        """,
-        height=368,
-        scrolling=False,
-    )
+        """
 
 
 def render_programados_produto(programacao, historico):
+    components.html(montar_programados_produto_html(programacao, historico), height=368, scrolling=False)
+
+
+def montar_programados_produto_html(programacao, historico):
     if programacao.empty and historico.empty:
-        render_chart("Itens programados no periodo", "chart_programados_produto", vazio="Sem itens programados no periodo.")
-        return
+        return montar_chart_html("Itens programados no periodo", vazio="Sem itens programados no periodo.")
 
     produtos = (
         programacao.groupby(["COD_PRODUTO", "PRODUTO"], as_index=False)
@@ -933,8 +986,7 @@ def render_programados_produto(programacao, historico):
         .head(12)
     )
     if produtos.empty:
-        render_chart("Itens programados no periodo", "chart_programados_produto", vazio="Sem itens programados no periodo.")
-        return
+        return montar_chart_html("Itens programados no periodo", vazio="Sem itens programados no periodo.")
 
     maior_valor = max(float(produtos["Quantidade"].max()), 1)
     itens = []
@@ -964,12 +1016,11 @@ def render_programados_produto(programacao, historico):
             """
         )
 
-    components.html(
-        f"""
+    return f"""
         <style>
             * {{ box-sizing: border-box; }}
             body {{ margin: 0; font-family: Arial, sans-serif; color: #000; }}
-            .card {{
+            .product-card {{
                 border: 2px solid #000;
                 border-radius: 8px;
                 background: #fff;
@@ -977,7 +1028,7 @@ def render_programados_produto(programacao, historico):
                 padding: 10px 12px 9px 12px;
                 overflow: hidden;
             }}
-            .title {{
+            .product-title {{
                 font-size: 14px;
                 font-weight: 900;
                 margin: 0 0 9px 0;
@@ -1064,14 +1115,11 @@ def render_programados_produto(programacao, historico):
                 border-right: 1.5px solid #000;
             }}
         </style>
-        <div class="card">
-            <div class="title">Itens programados no periodo</div>
+        <div class="dashboard-card product-card">
+            <div class="product-title">Itens programados no periodo</div>
             <div class="product-list">{"".join(itens)}</div>
         </div>
-        """,
-        height=368,
-        scrolling=False,
-    )
+        """
 
 
 def formatar_duracao_horas(horas):
@@ -1129,9 +1177,12 @@ def calcular_leadtime(historico):
 
 
 def render_leadtime_tabela(titulo, leadtime, coluna_nome, vazio):
+    components.html(montar_leadtime_tabela_html(titulo, leadtime, coluna_nome, vazio), height=368, scrolling=False)
+
+
+def montar_leadtime_tabela_html(titulo, leadtime, coluna_nome, vazio):
     if leadtime.empty:
-        render_chart(titulo, f"chart_{titulo}", vazio=vazio)
-        return
+        return montar_chart_html(titulo, vazio=vazio)
 
     resumo = (
         leadtime.groupby(coluna_nome, as_index=False)
@@ -1140,8 +1191,7 @@ def render_leadtime_tabela(titulo, leadtime, coluna_nome, vazio):
         .head(10)
     )
     if resumo.empty:
-        render_chart(titulo, f"chart_{titulo}", vazio=vazio)
-        return
+        return montar_chart_html(titulo, vazio=vazio)
 
     linhas = []
     for linha in resumo.itertuples(index=False):
@@ -1158,12 +1208,11 @@ def render_leadtime_tabela(titulo, leadtime, coluna_nome, vazio):
             """
         )
 
-    components.html(
-        f"""
+    return f"""
         <style>
             * {{ box-sizing: border-box; }}
             body {{ margin: 0; font-family: Arial, sans-serif; color: #000; }}
-            .card {{
+            .lead-card {{
                 border: 2px solid #000;
                 border-radius: 8px;
                 background: #fff;
@@ -1171,7 +1220,7 @@ def render_leadtime_tabela(titulo, leadtime, coluna_nome, vazio):
                 padding: 10px 12px 9px 12px;
                 overflow: hidden;
             }}
-            .title {{
+            .lead-title {{
                 font-size: 14px;
                 font-weight: 900;
                 margin: 0 0 9px 0;
@@ -1228,14 +1277,11 @@ def render_leadtime_tabela(titulo, leadtime, coluna_nome, vazio):
                 color: #333;
             }}
         </style>
-        <div class="card">
-            <div class="title">{titulo}</div>
+        <div class="dashboard-card lead-card">
+            <div class="lead-title">{titulo}</div>
             <div class="lead-list">{"".join(linhas)}</div>
         </div>
-        """,
-        height=368,
-        scrolling=False,
-    )
+        """
 
 
 def categoria_prazo(linha):
@@ -1253,16 +1299,18 @@ def categoria_prazo(linha):
 
 
 def render_realizacoes_periodo(historico, contexto_periodo):
+    components.html(montar_realizacoes_periodo_html(historico, contexto_periodo), height=368, scrolling=False)
+
+
+def montar_realizacoes_periodo_html(historico, contexto_periodo):
     historico_com_data = historico[historico["DATA"].notna()] if not historico.empty else pd.DataFrame()
     if historico_com_data.empty:
-        render_chart("Realizacoes por dia", "chart_realizacoes_periodo")
-        return
+        return montar_chart_html("Realizacoes por dia")
 
     if contexto_periodo.get("modo_data") == "Dia especifico":
         historico_com_hora = historico_com_data[historico_com_data["DATA_HORA_DT"].notna()].copy()
         if historico_com_hora.empty:
-            render_chart("Realizacoes por hora", "chart_realizacoes_periodo", vazio="Sem horario nos lancamentos do dia.")
-            return
+            return montar_chart_html("Realizacoes por hora", vazio="Sem horario nos lancamentos do dia.")
 
         hora_decimal = (
             historico_com_hora["DATA_HORA_DT"].dt.hour
@@ -1270,8 +1318,7 @@ def render_realizacoes_periodo(historico, contexto_periodo):
         )
         historico_com_hora = historico_com_hora[(hora_decimal >= 8) & (hora_decimal < 18)].copy()
         if historico_com_hora.empty:
-            render_chart("Realizacoes por hora", "chart_realizacoes_periodo", vazio="Sem lancamentos entre 08h e 18h.")
-            return
+            return montar_chart_html("Realizacoes por hora", vazio="Sem lancamentos entre 08h e 18h.")
 
         hora_decimal = (
             historico_com_hora["DATA_HORA_DT"].dt.hour
@@ -1304,8 +1351,7 @@ def render_realizacoes_periodo(historico, contexto_periodo):
             textfont=dict(color="#000000", size=12, family="Arial"),
         )
         fig.update_yaxes(rangemode="tozero")
-        render_chart("Realizacoes por hora", "chart_realizacoes_periodo", grafico_base(fig), travado=True)
-        return
+        return montar_chart_html("Realizacoes por hora", fig=grafico_base(fig), travado=True)
 
     por_dia = (
         historico_com_data.groupby("DATA", as_index=False)
@@ -1325,8 +1371,7 @@ def render_realizacoes_periodo(historico, contexto_periodo):
         )
 
     if len(por_dia) < 2:
-        render_chart("Realizacoes por dia", "chart_realizacoes_periodo", vazio="Aguardando mais lancamentos.")
-        return
+        return montar_chart_html("Realizacoes por dia", vazio="Aguardando mais lancamentos.")
 
     por_dia["Dia"] = pd.to_datetime(por_dia["DATA"]).dt.strftime("%d/%m")
     por_dia["Rotulo"] = por_dia["Realizado"].map(formatar_numero)
@@ -1345,55 +1390,53 @@ def render_realizacoes_periodo(historico, contexto_periodo):
         textfont=dict(color="#000000", size=12, family="Arial"),
     )
     fig.update_yaxes(rangemode="tozero")
-    render_chart("Realizacoes por dia", "chart_realizacoes_periodo", grafico_base(fig), travado=True)
+    return montar_chart_html("Realizacoes por dia", fig=grafico_base(fig), travado=True)
 
 
 def render_graficos(programacao, historico, contexto_periodo, historico_leadtime=None):
     historico_leadtime = historico if historico_leadtime is None else historico_leadtime
     leadtime = calcular_leadtime(historico_leadtime)
 
-    col_1, col_2, col_3 = st.columns(3, gap="small")
+    cards = []
 
-    with col_1:
-        if programacao.empty:
-            render_chart("Ordens por usuario", "chart_ordens_usuario")
-        else:
-            ordens_usuario = (
-                programacao.groupby("USUARIO_RESPONSAVEL", as_index=False)
-                .agg(Ordens=("OP", "count"))
-                .sort_values("Ordens", ascending=False)
-            )
-            ordens_usuario["Rotulo"] = ordens_usuario["Ordens"].map(formatar_numero)
-            fig = px.bar(
-                ordens_usuario,
-                x="USUARIO_RESPONSAVEL",
-                y="Ordens",
-                color="USUARIO_RESPONSAVEL",
-                text="Rotulo",
-                color_discrete_sequence=["#6fb6ff", "#89d47f", "#f2c94c", "#ff8f70", "#b8a3ff"],
-            )
-            fig = aplicar_rotulos_barras(grafico_base(fig))
-            fig.update_layout(showlegend=False, margin=dict(l=48, r=18, t=24, b=52))
-            fig.update_xaxes(tickangle=-35)
-            render_chart("Ordens por usuario", "chart_ordens_usuario", fig)
+    if programacao.empty:
+        cards.append(montar_chart_html("Ordens por usuario"))
+    else:
+        ordens_usuario = (
+            programacao.groupby("USUARIO_RESPONSAVEL", as_index=False)
+            .agg(Ordens=("OP", "count"))
+            .sort_values("Ordens", ascending=False)
+        )
+        ordens_usuario["Rotulo"] = ordens_usuario["Ordens"].map(formatar_numero)
+        fig = px.bar(
+            ordens_usuario,
+            x="USUARIO_RESPONSAVEL",
+            y="Ordens",
+            color="USUARIO_RESPONSAVEL",
+            text="Rotulo",
+            color_discrete_sequence=["#6fb6ff", "#89d47f", "#f2c94c", "#ff8f70", "#b8a3ff"],
+        )
+        fig = aplicar_rotulos_barras(grafico_base(fig))
+        fig.update_layout(showlegend=False, margin=dict(l=48, r=18, t=24, b=52))
+        fig.update_xaxes(tickangle=-35)
+        cards.append(montar_chart_html("Ordens por usuario", fig=fig))
 
-    with col_2:
-        if programacao.empty:
-            render_chart("Status das ordens", "chart_status_ordens")
-        else:
-            status_ordens = (
-                programacao.groupby("STATUS", as_index=False)
-                .agg(Ordens=("OP", "count"))
-                .sort_values("Ordens", ascending=False)
-            )
-            fig = px.pie(
-                status_ordens,
-                names="STATUS",
-                values="Ordens",
-                hole=0.58,
-                color_discrete_sequence=["#ff8f70", "#89d47f", "#f2c94c", "#6fb6ff"],
-            )
-            render_chart("Status das ordens", "chart_status_ordens", grafico_pizza_base(fig))
+    if programacao.empty:
+        cards.append(montar_chart_html("Status das ordens"))
+    else:
+        status_ordens = (
+            programacao.groupby("STATUS", as_index=False)
+            .agg(Ordens=("OP", "count"))
+            .sort_values("Ordens", ascending=False)
+        )
+        fig = px.pie(
+            status_ordens,
+            names="STATUS",
+            values="Ordens",
+            hole=0.58,
+            color_discrete_sequence=["#ff8f70", "#89d47f", "#f2c94c", "#6fb6ff"],
+        )
+        cards.append(montar_chart_html("Status das ordens", fig=grafico_pizza_base(fig)))
 
     comparativo_programado = (
         programacao.groupby("USUARIO_RESPONSAVEL", as_index=False)
@@ -1409,83 +1452,71 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
     )
     comparativo = comparativo_programado.merge(comparativo_realizado, on="USUARIO_RESPONSAVEL", how="outer").fillna(0)
 
-    with col_3:
-        if comparativo.empty:
-            render_chart("Programado x realizado", "chart_programado_realizado")
-        else:
-            comparativo_longo = comparativo.melt(
-                id_vars="USUARIO_RESPONSAVEL",
-                value_vars=["Programado", "Realizado", "Pendente"],
-                var_name="Indicador",
-                value_name="Quantidade",
-            )
-            comparativo_longo["Rotulo"] = comparativo_longo["Quantidade"].map(formatar_numero)
-            fig = px.bar(
-                comparativo_longo,
-                x="USUARIO_RESPONSAVEL",
-                y="Quantidade",
-                color="Indicador",
-                barmode="group",
-                text="Rotulo",
-                color_discrete_map={
-                    "Programado": "#6fb6ff",
-                    "Realizado": "#89d47f",
-                    "Pendente": "#ff8f70",
-                },
-            )
-            fig = aplicar_rotulos_barras(grafico_base(fig))
-            fig.update_layout(margin=dict(l=48, r=18, t=24, b=52))
-            fig.update_xaxes(tickangle=-35)
-            render_chart("Programado x realizado", "chart_programado_realizado", fig)
+    if comparativo.empty:
+        cards.append(montar_chart_html("Programado x realizado"))
+    else:
+        comparativo_longo = comparativo.melt(
+            id_vars="USUARIO_RESPONSAVEL",
+            value_vars=["Programado", "Realizado", "Pendente"],
+            var_name="Indicador",
+            value_name="Quantidade",
+        )
+        comparativo_longo["Rotulo"] = comparativo_longo["Quantidade"].map(formatar_numero)
+        fig = px.bar(
+            comparativo_longo,
+            x="USUARIO_RESPONSAVEL",
+            y="Quantidade",
+            color="Indicador",
+            barmode="group",
+            text="Rotulo",
+            color_discrete_map={
+                "Programado": "#6fb6ff",
+                "Realizado": "#89d47f",
+                "Pendente": "#ff8f70",
+            },
+        )
+        fig = aplicar_rotulos_barras(grafico_base(fig))
+        fig.update_layout(margin=dict(l=48, r=18, t=24, b=52))
+        fig.update_xaxes(tickangle=-35)
+        cards.append(montar_chart_html("Programado x realizado", fig=fig))
 
-    st.markdown('<div class="dashboard-row-gap"></div>', unsafe_allow_html=True)
+    if programacao.empty:
+        cards.append(montar_chart_html("Ordens por origem"))
+    else:
+        origem = (
+            programacao.groupby("ABA_ORIGEM", as_index=False)
+            .agg(Ordens=("OP", "count"))
+            .sort_values("Ordens", ascending=False)
+        )
+        fig = px.pie(
+            origem,
+            names="ABA_ORIGEM",
+            values="Ordens",
+            hole=0.0,
+            color_discrete_sequence=["#6fb6ff", "#f2c94c", "#89d47f", "#ff8f70"],
+        )
+        cards.append(montar_chart_html("Ordens por origem", fig=grafico_pizza_base(fig)))
 
-    col_1, col_2, col_3 = st.columns(3, gap="small")
-    with col_1:
-        if programacao.empty:
-            render_chart("Ordens por origem", "chart_ordens_origem")
-        else:
-            origem = (
-                programacao.groupby("ABA_ORIGEM", as_index=False)
-                .agg(Ordens=("OP", "count"))
-                .sort_values("Ordens", ascending=False)
-            )
-            fig = px.pie(
-                origem,
-                names="ABA_ORIGEM",
-                values="Ordens",
-                hole=0.0,
-                color_discrete_sequence=["#6fb6ff", "#f2c94c", "#89d47f", "#ff8f70"],
-            )
-            render_chart("Ordens por origem", "chart_ordens_origem", grafico_pizza_base(fig))
-
-    with col_2:
-        render_ranking_produzido(historico)
-
-    with col_3:
-        render_realizacoes_periodo(historico, contexto_periodo)
-
-    st.markdown('<div class="dashboard-row-gap"></div>', unsafe_allow_html=True)
-
-    col_1, col_2, col_3 = st.columns(3, gap="small")
-    with col_1:
-        render_programados_produto(programacao, historico)
-
-    with col_2:
-        render_leadtime_tabela(
+    cards.append(montar_ranking_produzido_html(historico))
+    cards.append(montar_realizacoes_periodo_html(historico, contexto_periodo))
+    cards.append(montar_programados_produto_html(programacao, historico))
+    cards.append(
+        montar_leadtime_tabela_html(
             "Tempo medio por usuario",
             leadtime,
             "USUARIO_RESPONSAVEL",
             "Aguardando ordens com inicio e fim.",
         )
-
-    with col_3:
-        render_leadtime_tabela(
+    )
+    cards.append(
+        montar_leadtime_tabela_html(
             "Tempo medio por produto",
             leadtime,
             "PRODUTO",
             "Aguardando produtos com inicio e fim.",
         )
+    )
+    render_dashboard_grid(cards)
 
 def render_tabela_resumo(programacao, historico):
     if programacao.empty:
