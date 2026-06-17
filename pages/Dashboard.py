@@ -619,6 +619,11 @@ def aplicar_filtros(programacao, historico):
         programacao = programacao.iloc[0:0]
         historico = historico.iloc[0:0]
 
+    ordem_selecionada = st.selectbox("Ordem", opcoes_combobox(programacao.get("OP", pd.Series(dtype=str))), key="dashboard_filtro_ordem")
+    if ordem_selecionada != "Todos":
+        programacao = programacao[programacao["OP"].astype(str).str.strip() == ordem_selecionada]
+        historico = historico[historico["OP"].astype(str).str.strip() == ordem_selecionada]
+
     item_selecionado = st.selectbox("Item", opcoes_combobox(programacao.get("PRODUTO", pd.Series(dtype=str))), key="dashboard_filtro_item")
     if item_selecionado != "Todos":
         programacao = programacao[programacao["PRODUTO"].astype(str).str.strip() == item_selecionado]
@@ -692,6 +697,7 @@ def aplicar_filtros(programacao, historico):
         "modo_data": modo_data,
         "data_inicio": data_inicio,
         "data_fim": data_fim,
+        "ordem_filtrada": ordem_selecionada != "Todos",
     }
 
     if data_inicio is not None and data_fim is not None:
@@ -1268,23 +1274,40 @@ def calcular_leadtime(historico):
     return leadtime[colunas]
 
 
-def render_leadtime_tabela(titulo, leadtime, coluna_nome, vazio, coluna_tempo="Leadtime_horas"):
-    components.html(montar_leadtime_tabela_html(titulo, leadtime, coluna_nome, vazio, coluna_tempo), height=368, scrolling=False)
+def render_leadtime_tabela(titulo, leadtime, coluna_nome, vazio, coluna_tempo="Leadtime_horas", total_por_quantidade=False):
+    components.html(montar_leadtime_tabela_html(titulo, leadtime, coluna_nome, vazio, coluna_tempo, total_por_quantidade), height=368, scrolling=False)
 
 
-def montar_leadtime_tabela_html(titulo, leadtime, coluna_nome, vazio, coluna_tempo="Leadtime_horas"):
+def montar_leadtime_tabela_html(titulo, leadtime, coluna_nome, vazio, coluna_tempo="Leadtime_horas", total_por_quantidade=False):
     if leadtime.empty:
         return montar_chart_html(titulo, vazio=vazio)
 
     if coluna_tempo not in leadtime.columns:
         coluna_tempo = "Leadtime_horas"
 
-    resumo = (
-        leadtime.groupby(coluna_nome, as_index=False)
-        .agg(Media_horas=(coluna_tempo, "mean"), Ordens=("OP", "count"))
-        .sort_values(["Media_horas", "Ordens"], ascending=[True, False])
-        .head(10)
-    )
+    if total_por_quantidade:
+        resumo = (
+            leadtime.groupby(coluna_nome, as_index=False)
+            .agg(
+                Tempo_total_horas=("Leadtime_horas", "sum"),
+                Quantidade_total=("Quantidade_movimentada", "sum"),
+                Ordens=("OP", "nunique"),
+            )
+        )
+        resumo["Media_horas"] = resumo.apply(
+            lambda linha: linha["Tempo_total_horas"] / linha["Quantidade_total"]
+            if linha["Quantidade_total"] > 0
+            else linha["Tempo_total_horas"],
+            axis=1,
+        )
+        resumo = resumo.sort_values(["Media_horas", "Ordens"], ascending=[True, False]).head(10)
+    else:
+        resumo = (
+            leadtime.groupby(coluna_nome, as_index=False)
+            .agg(Media_horas=(coluna_tempo, "mean"), Ordens=("OP", "count"))
+            .sort_values(["Media_horas", "Ordens"], ascending=[True, False])
+            .head(10)
+        )
     if resumo.empty:
         return montar_chart_html(titulo, vazio=vazio)
 
@@ -1491,6 +1514,7 @@ def montar_realizacoes_periodo_html(historico, contexto_periodo):
 def render_graficos(programacao, historico, contexto_periodo, historico_leadtime=None):
     historico_leadtime = historico if historico_leadtime is None else historico_leadtime
     leadtime = calcular_leadtime(historico_leadtime)
+    ordem_filtrada = bool(contexto_periodo.get("ordem_filtrada", False))
 
     cards = []
 
@@ -1610,7 +1634,8 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
             leadtime,
             "PRODUTO",
             "Aguardando produtos com inicio e fim.",
-            "Leadtime_item_horas",
+            "Leadtime_horas" if ordem_filtrada else "Leadtime_item_horas",
+            total_por_quantidade=not ordem_filtrada,
         )
     )
     render_dashboard_grid(cards)
