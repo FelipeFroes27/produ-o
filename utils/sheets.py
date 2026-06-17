@@ -1,5 +1,5 @@
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import gspread
 import pandas as pd
@@ -11,6 +11,7 @@ SPREADSHEET_ID = "10_J6pYgEcQNNQjwWIZCaeNPeOo928GoQ3zENwpLtWSc"
 ABAS_PLANEJAMENTO = ["Produ\u00e7\u00e3o", "Manuten\u00e7\u00e3o", "Pe\u00e7as"]
 ABA_USUARIOS = "Usu\u00e1rios"
 ABA_HISTORICO = "Hist\u00f3rico"
+FUSO_BRASILIA = timezone(timedelta(hours=-3))
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -162,7 +163,7 @@ def lancar_realizacao(ordem, quantidade_lancada):
 def registrar_historico(ordem, quantidade_lancada):
     worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
     headers = worksheet.row_values(1)
-    data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    data_hora = datetime.now(FUSO_BRASILIA).strftime("%d/%m/%Y %H:%M:%S")
     linha = []
 
     for header in headers:

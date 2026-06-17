@@ -719,11 +719,14 @@ def grafico_pizza_base(fig):
     return fig
 
 
-def render_chart(titulo, key, fig=None, vazio="Sem dados para este grafico."):
+def render_chart(titulo, key, fig=None, vazio="Sem dados para este grafico.", travado=False):
     if fig is None:
         corpo = f'<div class="empty-chart">{vazio}</div>'
     else:
-        corpo = fig.to_html(include_plotlyjs="cdn", full_html=False, config={"displayModeBar": False})
+        config = {"displayModeBar": False}
+        if travado:
+            config.update({"staticPlot": True, "scrollZoom": False, "doubleClick": False})
+        corpo = fig.to_html(include_plotlyjs="cdn", full_html=False, config=config)
 
     components.html(
         f"""
@@ -877,7 +880,7 @@ def render_ranking_produzido(historico):
     )
 
 
-def render_programados_produto(programacao):
+def render_programados_produto(programacao, historico):
     if programacao.empty:
         render_chart("Itens programados no periodo", "chart_programados_produto", vazio="Sem itens programados no periodo.")
         return
@@ -888,6 +891,14 @@ def render_programados_produto(programacao):
         .sort_values(["Quantidade", "Ordens"], ascending=False)
         .head(12)
     )
+    realizado_produtos = (
+        historico.groupby(["CODIGO", "PRODUTO"], as_index=False)
+        .agg(Realizado=("QUANTIDADE_NUM", "sum"))
+        .rename(columns={"CODIGO": "COD_PRODUTO"})
+        if not historico.empty
+        else pd.DataFrame(columns=["COD_PRODUTO", "PRODUTO", "Realizado"])
+    )
+    produtos = produtos.merge(realizado_produtos, on=["COD_PRODUTO", "PRODUTO"], how="left").fillna({"Realizado": 0})
     if produtos.empty:
         render_chart("Itens programados no periodo", "chart_programados_produto", vazio="Sem itens programados no periodo.")
         return
@@ -898,18 +909,24 @@ def render_programados_produto(programacao):
         codigo = escape(str(linha.COD_PRODUTO) or "Sem codigo")
         produto = escape(str(linha.PRODUTO) or "Produto sem descricao")
         quantidade_num = float(linha.Quantidade)
+        realizado_num = float(linha.Realizado)
         quantidade = formatar_numero(quantidade_num)
+        realizado = formatar_numero(realizado_num)
         ordens = int(linha.Ordens)
-        largura = max(7, min(100, (quantidade_num / maior_valor) * 100))
+        largura_programado = max(7, min(100, (quantidade_num / maior_valor) * 100))
+        largura_realizado = min(largura_programado, max(0, (realizado_num / maior_valor) * 100))
         itens.append(
             f"""
             <div class="product-row">
                 <div class="product-top">
                     <div class="product-name" title="{produto}">{produto}</div>
-                    <div class="product-qty">{quantidade}</div>
+                    <div class="product-qty"><span>{realizado}</span> / {quantidade}</div>
                 </div>
-                <div class="product-meta">Cod. {codigo} | {ordens} ordem(ns)</div>
-                <div class="product-track"><div class="product-fill" style="width:{largura}%;"></div></div>
+                <div class="product-meta">Cod. {codigo} | {quantidade} programado | {realizado} realizado | {ordens} ordem(ns)</div>
+                <div class="product-track">
+                    <div class="product-fill" style="width:{largura_programado}%;"></div>
+                    <div class="product-done" style="width:{largura_realizado}%;"></div>
+                </div>
             </div>
             """
         )
@@ -976,6 +993,9 @@ def render_programados_produto(programacao):
                 font-weight: 900;
                 white-space: nowrap;
             }}
+            .product-qty span {{
+                color: #047857;
+            }}
             .product-meta {{
                 margin-top: 3px;
                 font-size: 11px;
@@ -986,6 +1006,7 @@ def render_programados_produto(programacao):
                 text-overflow: ellipsis;
             }}
             .product-track {{
+                position: relative;
                 height: 8px;
                 margin-top: 6px;
                 border: 1.5px solid #000;
@@ -994,8 +1015,19 @@ def render_programados_produto(programacao):
                 background: #fff;
             }}
             .product-fill {{
+                position: absolute;
+                left: 0;
+                top: 0;
                 height: 100%;
                 background: #6fb6ff;
+                border-right: 1.5px solid #000;
+            }}
+            .product-done {{
+                position: absolute;
+                left: 0;
+                top: 0;
+                height: 100%;
+                background: #89d47f;
                 border-right: 1.5px solid #000;
             }}
         </style>
@@ -1075,7 +1107,7 @@ def render_realizacoes_periodo(historico, contexto_periodo):
             textfont=dict(color="#000000", size=12, family="Arial"),
         )
         fig.update_yaxes(rangemode="tozero")
-        render_chart("Realizacoes por hora", "chart_realizacoes_periodo", grafico_base(fig))
+        render_chart("Realizacoes por hora", "chart_realizacoes_periodo", grafico_base(fig), travado=True)
         return
 
     por_dia = (
@@ -1116,7 +1148,7 @@ def render_realizacoes_periodo(historico, contexto_periodo):
         textfont=dict(color="#000000", size=12, family="Arial"),
     )
     fig.update_yaxes(rangemode="tozero")
-    render_chart("Realizacoes por dia", "chart_realizacoes_periodo", grafico_base(fig))
+    render_chart("Realizacoes por dia", "chart_realizacoes_periodo", grafico_base(fig), travado=True)
 
 
 def render_graficos(programacao, historico, contexto_periodo):
@@ -1233,7 +1265,7 @@ def render_graficos(programacao, historico, contexto_periodo):
 
     col_1, col_2, col_3 = st.columns(3)
     with col_1:
-        render_programados_produto(programacao)
+        render_programados_produto(programacao, historico)
 
     with col_2:
         if programacao.empty:
