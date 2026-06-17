@@ -1,7 +1,11 @@
+import pandas as pd
+import plotly.express as px
+import streamlit.components.v1 as components
 import streamlit as st
 from html import escape
 
 from utils.display_mode import ativar_modo_exibicao, render_menu_lateral
+from utils.sheets import carregar_historico, carregar_ordens
 
 
 SENHA_DASHBOARD = "Trendx2026"
@@ -15,6 +19,7 @@ st.set_page_config(
 )
 
 ativar_modo_exibicao("dashboard")
+render_menu_lateral()
 
 
 def aplicar_estilo():
@@ -459,6 +464,12 @@ def autenticar_dashboard():
     if st.session_state.get("dashboard_liberado"):
         return True
 
+    modal_senha_dashboard()
+    return False
+
+
+@st.dialog("Acesso ao dashboard")
+def modal_senha_dashboard():
     st.markdown(
         """
         <div class="password-shell">
@@ -469,33 +480,20 @@ def autenticar_dashboard():
         unsafe_allow_html=True,
     )
 
-    with st.form("dashboard_login"):
-        senha = st.text_input("Senha", type="password")
-        entrar = st.form_submit_button("Entrar", use_container_width=True)
-
-    if entrar:
+    senha = st.text_input("Senha", type="password")
+    if st.button("Entrar", use_container_width=True):
         if senha == SENHA_DASHBOARD:
             st.session_state.dashboard_liberado = True
-            return True
-
-        st.error("Senha incorreta.")
-
-    return False
+            st.rerun()
+        else:
+            st.error("Senha incorreta.")
 
 
 aplicar_estilo()
+render_sidebar()
 
 if not autenticar_dashboard():
     st.stop()
-
-render_menu_lateral()
-render_sidebar()
-
-import pandas as pd
-import plotly.express as px
-import streamlit.components.v1 as components
-
-from utils.sheets import carregar_historico, carregar_ordens
 
 
 def filtrar_programacao(ordens):
