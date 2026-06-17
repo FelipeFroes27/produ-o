@@ -5,10 +5,11 @@ import streamlit as st
 from html import escape
 
 from utils.display_mode import ativar_modo_exibicao, render_menu_lateral
-from utils.sheets import carregar_historico, carregar_ordens
+from utils.sheets import carregar_bd_produtos, carregar_historico, carregar_ordens
 
 
 SENHA_DASHBOARD = "Trendx2026"
+COLUNAS_META_PRODUTO = ["CATEGORIA", "MARCA", "GRUPO"]
 
 
 st.set_page_config(
@@ -530,6 +531,64 @@ def filtrar_programacao(ordens):
     return programacao
 
 
+def chave_texto(valor):
+    return str(valor or "").strip().upper()
+
+
+def enriquecer_produtos(dados, produtos, coluna_codigo, coluna_produto):
+    dados = dados.copy()
+    for coluna in COLUNAS_META_PRODUTO:
+        if coluna not in dados.columns:
+            dados[coluna] = ""
+
+    if dados.empty or produtos.empty:
+        return dados
+
+    base = produtos.copy()
+    for coluna in ["COD_PRODUTO", "PRODUTO", *COLUNAS_META_PRODUTO]:
+        if coluna not in base.columns:
+            base[coluna] = ""
+
+    meta_codigo = (
+        base[base["COD_PRODUTO"].astype(str).str.strip().ne("")]
+        .drop_duplicates("COD_PRODUTO")
+        .set_index("COD_PRODUTO")[COLUNAS_META_PRODUTO]
+    )
+    meta_produto = (
+        base[base["PRODUTO"].astype(str).str.strip().ne("")]
+        .assign(PRODUTO_CHAVE=lambda df: df["PRODUTO"].map(chave_texto))
+        .drop_duplicates("PRODUTO_CHAVE")
+        .set_index("PRODUTO_CHAVE")[COLUNAS_META_PRODUTO]
+    )
+
+    if coluna_codigo in dados.columns and not meta_codigo.empty:
+        por_codigo = dados[coluna_codigo].astype(str).str.strip().map(meta_codigo.to_dict("index"))
+        for coluna in COLUNAS_META_PRODUTO:
+            dados[coluna] = dados[coluna].mask(
+                dados[coluna].astype(str).str.strip().eq(""),
+                por_codigo.map(lambda valor: valor.get(coluna, "") if isinstance(valor, dict) else ""),
+            )
+
+    if coluna_produto in dados.columns and not meta_produto.empty:
+        por_produto = dados[coluna_produto].map(chave_texto).map(meta_produto.to_dict("index"))
+        for coluna in COLUNAS_META_PRODUTO:
+            dados[coluna] = dados[coluna].mask(
+                dados[coluna].astype(str).str.strip().eq(""),
+                por_produto.map(lambda valor: valor.get(coluna, "") if isinstance(valor, dict) else ""),
+            )
+
+    return dados
+
+
+def opcoes_combobox(serie):
+    valores = sorted(
+        valor
+        for valor in serie.dropna().astype(str).str.strip().unique().tolist()
+        if valor
+    )
+    return ["Todos", *valores]
+
+
 def aplicar_filtros(programacao, historico):
     usuarios = sorted(
         usuario
@@ -545,6 +604,40 @@ def aplicar_filtros(programacao, historico):
     st.markdown('<p class="side-label">Filtros</p>', unsafe_allow_html=True)
     usuarios_selecionados = st.multiselect("Usuario", usuarios, default=usuarios)
     tipos_selecionados = st.multiselect("Tipo", tipos, default=tipos)
+
+    if usuarios_selecionados:
+        programacao = programacao[programacao["USUARIO_RESPONSAVEL"].isin(usuarios_selecionados)]
+        historico = historico[historico["USUARIO_RESPONSAVEL"].isin(usuarios_selecionados)]
+    else:
+        programacao = programacao.iloc[0:0]
+        historico = historico.iloc[0:0]
+
+    if tipos_selecionados:
+        programacao = programacao[programacao["ABA_ORIGEM"].isin(tipos_selecionados)]
+        historico = historico[historico["TIPO"].isin(tipos_selecionados)]
+    else:
+        programacao = programacao.iloc[0:0]
+        historico = historico.iloc[0:0]
+
+    item_selecionado = st.selectbox("Item", opcoes_combobox(programacao.get("PRODUTO", pd.Series(dtype=str))), key="dashboard_filtro_item")
+    if item_selecionado != "Todos":
+        programacao = programacao[programacao["PRODUTO"].astype(str).str.strip() == item_selecionado]
+        historico = historico[historico["PRODUTO"].astype(str).str.strip() == item_selecionado]
+
+    categoria_selecionada = st.selectbox("Categoria", opcoes_combobox(programacao.get("CATEGORIA", pd.Series(dtype=str))), key="dashboard_filtro_categoria")
+    if categoria_selecionada != "Todos":
+        programacao = programacao[programacao["CATEGORIA"].astype(str).str.strip() == categoria_selecionada]
+        historico = historico[historico["CATEGORIA"].astype(str).str.strip() == categoria_selecionada]
+
+    marca_selecionada = st.selectbox("Marca", opcoes_combobox(programacao.get("MARCA", pd.Series(dtype=str))), key="dashboard_filtro_marca")
+    if marca_selecionada != "Todos":
+        programacao = programacao[programacao["MARCA"].astype(str).str.strip() == marca_selecionada]
+        historico = historico[historico["MARCA"].astype(str).str.strip() == marca_selecionada]
+
+    grupo_selecionado = st.selectbox("Grupo", opcoes_combobox(programacao.get("GRUPO", pd.Series(dtype=str))), key="dashboard_filtro_grupo")
+    if grupo_selecionado != "Todos":
+        programacao = programacao[programacao["GRUPO"].astype(str).str.strip() == grupo_selecionado]
+        historico = historico[historico["GRUPO"].astype(str).str.strip() == grupo_selecionado]
 
     datas_programacao = programacao["DATA_PRIORIDADE"].dropna() if "DATA_PRIORIDADE" in programacao else pd.Series(dtype="datetime64[ns]")
     datas_historico = historico["DATA"].dropna() if "DATA" in historico else pd.Series(dtype="datetime64[ns]")
@@ -594,20 +687,6 @@ def aplicar_filtros(programacao, historico):
         if isinstance(intervalo, tuple) and len(intervalo) == 2:
             data_inicio = pd.Timestamp(intervalo[0])
             data_fim = pd.Timestamp(intervalo[1])
-
-    if usuarios_selecionados:
-        programacao = programacao[programacao["USUARIO_RESPONSAVEL"].isin(usuarios_selecionados)]
-        historico = historico[historico["USUARIO_RESPONSAVEL"].isin(usuarios_selecionados)]
-    else:
-        programacao = programacao.iloc[0:0]
-        historico = historico.iloc[0:0]
-
-    if tipos_selecionados:
-        programacao = programacao[programacao["ABA_ORIGEM"].isin(tipos_selecionados)]
-        historico = historico[historico["TIPO"].isin(tipos_selecionados)]
-    else:
-        programacao = programacao.iloc[0:0]
-        historico = historico.iloc[0:0]
 
     contexto_periodo = {
         "modo_data": modo_data,
@@ -1566,6 +1645,7 @@ def render_tabela_resumo(programacao, historico):
 
 try:
     ordens = carregar_ordens()
+    bd_produtos = carregar_bd_produtos()
     historico = preparar_historico(carregar_historico())
 except Exception as exc:
     st.error("Nao foi possivel carregar os dados do dashboard.")
@@ -1573,6 +1653,8 @@ except Exception as exc:
     st.stop()
 
 programacao = filtrar_programacao(ordens)
+programacao = enriquecer_produtos(programacao, bd_produtos, "COD_PRODUTO", "PRODUTO")
+historico = enriquecer_produtos(historico, bd_produtos, "CODIGO", "PRODUTO")
 
 st.markdown('<div class="dashboard-top-spacer"></div>', unsafe_allow_html=True)
 
@@ -1587,6 +1669,7 @@ with lateral:
         if st.button("Atualizar dados", key="dashboard_atualizar_dados", use_container_width=True):
             carregar_ordens.clear()
             carregar_historico.clear()
+            carregar_bd_produtos.clear()
             st.rerun()
         programacao, historico, contexto_periodo = aplicar_filtros(programacao, historico)
         historico_fim = historico_realizado(historico)

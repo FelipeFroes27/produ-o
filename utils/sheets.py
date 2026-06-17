@@ -11,6 +11,7 @@ SPREADSHEET_ID = "10_J6pYgEcQNNQjwWIZCaeNPeOo928GoQ3zENwpLtWSc"
 ABAS_PLANEJAMENTO = ["Produ\u00e7\u00e3o", "Manuten\u00e7\u00e3o", "Pe\u00e7as"]
 ABA_USUARIOS = "Usu\u00e1rios"
 ABA_HISTORICO = "Hist\u00f3rico"
+ABA_BD_PRODUTOS = "Bd_produtos"
 FUSO_BRASILIA = timezone(timedelta(hours=-3))
 COLUNAS_USUARIOS = ["Codigo", "Nome"]
 COLUNAS_ORDENS = [
@@ -50,6 +51,13 @@ COLUNAS_HISTORICO = [
     "QUANTIDADE_NUM",
     "TIPO",
     "ACAO",
+]
+COLUNAS_PRODUTOS = [
+    "COD_PRODUTO",
+    "PRODUTO",
+    "CATEGORIA",
+    "MARCA",
+    "GRUPO",
 ]
 
 SCOPES = [
@@ -176,6 +184,35 @@ def carregar_historico():
     return _garantir_colunas(df, COLUNAS_HISTORICO)
 
 
+@st.cache_data(ttl=180)
+def carregar_bd_produtos():
+    try:
+        worksheet = abrir_planilha().worksheet(ABA_BD_PRODUTOS)
+    except Exception:
+        return _produtos_vazios()
+
+    values = worksheet.get_all_values()
+    if not values:
+        return _produtos_vazios()
+
+    headers = [str(coluna).strip() for coluna in values[0]]
+    rows = []
+    for row in values[1:]:
+        registro = {
+            header: str(row[pos]).strip() if pos < len(row) else ""
+            for pos, header in enumerate(headers)
+            if header
+        }
+        rows.append(registro)
+
+    df = pd.DataFrame(rows)
+    df = _limpar_dataframe(df)
+    if df.empty:
+        return _produtos_vazios()
+
+    return _padronizar_produtos(df)
+
+
 def lancar_realizacao(ordem, quantidade_lancada):
     aba_origem = str(ordem["ABA_ORIGEM"])
     linha_planilha = int(ordem["LINHA_PLANILHA"])
@@ -279,6 +316,40 @@ def _historico_vazio():
         coluna: pd.Series(dtype=_dtype_coluna(coluna))
         for coluna in COLUNAS_HISTORICO
     })
+
+
+def _produtos_vazios():
+    return pd.DataFrame({
+        coluna: pd.Series(dtype="object")
+        for coluna in COLUNAS_PRODUTOS
+    })
+
+
+def _padronizar_produtos(df):
+    df = df.copy()
+    colunas = {
+        "COD_PRODUTO": _encontrar_coluna(df, ["COD_PRODUTO", "CODIGO PRODUTO", "CODIGO", "COD", "SKU", "COD ITEM"]),
+        "PRODUTO": _encontrar_coluna(df, ["PRODUTO", "DESCRI\u00c7\u00c3O", "DESCRICAO", "ITEM", "DESCRI\u00c7\u00c3O ITEM", "DESCRICAO ITEM"]),
+        "CATEGORIA": _encontrar_coluna(df, ["CATEGORIA", "CATEGORIA PRODUTO"]),
+        "MARCA": _encontrar_coluna(df, ["MARCA", "BRAND"]),
+        "GRUPO": _encontrar_coluna(df, ["GRUPO", "GRUPO PRODUTO", "FAM\u00cdLIA", "FAMILIA"]),
+    }
+
+    produtos = pd.DataFrame()
+    for nome_padrao, coluna_origem in colunas.items():
+        if coluna_origem is None:
+            produtos[nome_padrao] = pd.Series(dtype="object")
+        else:
+            produtos[nome_padrao] = df[coluna_origem].astype(str).str.strip()
+
+    campos_chave = ["COD_PRODUTO", "PRODUTO", "CATEGORIA", "MARCA", "GRUPO"]
+    tem_dados = produtos[campos_chave].apply(lambda linha: any(str(valor).strip() for valor in linha), axis=1)
+    produtos = produtos[tem_dados].copy()
+    if produtos.empty:
+        return _produtos_vazios()
+
+    produtos = produtos.drop_duplicates(subset=["COD_PRODUTO", "PRODUTO"], keep="first")
+    return _garantir_colunas(produtos, COLUNAS_PRODUTOS)
 
 
 def _remover_linhas_de_cabecalho_repetido(df):
