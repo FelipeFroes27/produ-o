@@ -241,13 +241,25 @@ def _padronizar_ordens(df):
     tem_dados = df[campos_chave].apply(lambda linha: any(str(valor).strip() for valor in linha), axis=1)
     df = df[tem_dados].copy()
 
+    if df.empty:
+        df["USUARIO_RESPONSAVEL"] = pd.Series(dtype="object")
+        df["STATUS"] = pd.Series(dtype="object")
+        df["REALIZADO"] = pd.Series(dtype="object")
+        df["QUANTIDADE_NUM"] = pd.Series(dtype="float64")
+        df["REALIZADO_NUM"] = pd.Series(dtype="float64")
+        df["SALDO_NUM"] = pd.Series(dtype="float64")
+        df["DATA_PRIORIDADE"] = pd.Series(dtype="datetime64[ns]")
+        df["DIAS_ATRASO"] = pd.Series(dtype="float64")
+        df["ATRASADA"] = pd.Series(dtype="bool")
+        return df
+
     df["USUARIO_RESPONSAVEL"] = df["USUARIO_RESPONSAVEL"].replace("", "Sem responsavel")
     df["STATUS"] = df["STATUS"].replace("", "Sem status")
     df["REALIZADO"] = df["REALIZADO"].replace("", "0")
     df["QUANTIDADE_NUM"] = _serie_numero(df["QUANTIDADE"])
     df["REALIZADO_NUM"] = _serie_numero(df["REALIZADO"])
     df["SALDO_NUM"] = (df["QUANTIDADE_NUM"] - df["REALIZADO_NUM"]).clip(lower=0)
-    df["DATA_PRIORIDADE"] = df.apply(_data_prioridade, axis=1)
+    df["DATA_PRIORIDADE"] = pd.to_datetime(df.apply(_data_prioridade, axis=1), errors="coerce")
     df["DIAS_ATRASO"] = (pd.Timestamp.today().normalize() - df["DATA_PRIORIDADE"]).dt.days
     df["ATRASADA"] = (df["DIAS_ATRASO"] > 0) & (df["STATUS"].str.upper() != "OK")
 
