@@ -1444,10 +1444,10 @@ def montar_realizacoes_periodo_html(historico, contexto_periodo):
             historico_com_hora["DATA_HORA_DT"].dt.hour
             + (historico_com_hora["DATA_HORA_DT"].dt.minute / 60)
         )
-        historico_com_hora["FAIXA_INICIO"] = (((hora_decimal - 8) // 2) * 2 + 8).astype(int)
-        historico_com_hora["Faixa"] = historico_com_hora["FAIXA_INICIO"].map(lambda hora: f"{hora:02d}h-{hora + 2:02d}h")
+        historico_com_hora["HORA_INICIO"] = historico_com_hora["DATA_HORA_DT"].dt.hour.astype(int)
+        historico_com_hora["Faixa"] = historico_com_hora["HORA_INICIO"].map(lambda hora: f"{hora:02d}h")
 
-        faixas = [f"{hora:02d}h-{hora + 2:02d}h" for hora in range(8, 18, 2)]
+        faixas = [f"{hora:02d}h" for hora in range(8, 19)]
         por_hora = (
             historico_com_hora.groupby("Faixa", as_index=False)
             .agg(Realizado=("QUANTIDADE_NUM", "sum"))
@@ -1469,9 +1469,14 @@ def montar_realizacoes_periodo_html(historico, contexto_periodo):
             marker=dict(size=8, line=dict(width=1.5, color="#000000"), color="#89d47f"),
             textposition="top center",
             textfont=dict(color="#000000", size=12, family="Arial"),
+            cliponaxis=False,
         )
-        fig.update_yaxes(rangemode="tozero")
-        return montar_chart_html("Realizacoes por hora", fig=grafico_base(fig), travado=True)
+        max_realizado = float(por_hora["Realizado"].max()) if not por_hora.empty else 0
+        y_max = max_realizado * 1.22 if max_realizado > 0 else 1
+        fig = grafico_base(fig)
+        fig.update_layout(margin=dict(l=48, r=18, t=38, b=48))
+        fig.update_yaxes(range=[0, y_max])
+        return montar_chart_html("Realizacoes por hora", fig=fig, travado=True)
 
     por_dia = (
         historico_com_data.groupby("DATA", as_index=False)
@@ -1508,9 +1513,14 @@ def montar_realizacoes_periodo_html(historico, contexto_periodo):
         marker=dict(size=8, line=dict(width=1.5, color="#000000"), color="#89d47f"),
         textposition="top center",
         textfont=dict(color="#000000", size=12, family="Arial"),
+        cliponaxis=False,
     )
-    fig.update_yaxes(rangemode="tozero")
-    return montar_chart_html("Realizacoes por dia", fig=grafico_base(fig), travado=True)
+    max_realizado = float(por_dia["Realizado"].max()) if not por_dia.empty else 0
+    y_max = max_realizado * 1.22 if max_realizado > 0 else 1
+    fig = grafico_base(fig)
+    fig.update_layout(margin=dict(l=48, r=18, t=38, b=48))
+    fig.update_yaxes(range=[0, y_max])
+    return montar_chart_html("Realizacoes por dia", fig=fig, travado=True)
 
 
 def render_graficos(programacao, historico, contexto_periodo, historico_leadtime=None):
