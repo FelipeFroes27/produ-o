@@ -12,6 +12,44 @@ ABAS_PLANEJAMENTO = ["Produ\u00e7\u00e3o", "Manuten\u00e7\u00e3o", "Pe\u00e7as"]
 ABA_USUARIOS = "Usu\u00e1rios"
 ABA_HISTORICO = "Hist\u00f3rico"
 FUSO_BRASILIA = timezone(timedelta(hours=-3))
+COLUNAS_USUARIOS = ["Codigo", "Nome"]
+COLUNAS_ORDENS = [
+    "USUARIO_RESPONSAVEL",
+    "STATUS",
+    "OP",
+    "COD_PRODUTO",
+    "PRODUTO",
+    "COD_PECA",
+    "PECA",
+    "QTD_PECAS",
+    "QUANTIDADE",
+    "REALIZADO",
+    "DATA_ABERTURA",
+    "DATA_PREVISTA",
+    "DATA",
+    "OBS",
+    "ABA_ORIGEM",
+    "LINHA_PLANILHA",
+    "PECAS_BLOCO",
+    "QUANTIDADE_NUM",
+    "REALIZADO_NUM",
+    "SALDO_NUM",
+    "DATA_PRIORIDADE",
+    "DIAS_ATRASO",
+    "ATRASADA",
+]
+COLUNAS_HISTORICO = [
+    "USUARIO_RESPONSAVEL",
+    "OP",
+    "DATA_HORA",
+    "DATA_HORA_DT",
+    "DATA",
+    "CODIGO",
+    "PRODUTO",
+    "QUANTIDADE",
+    "QUANTIDADE_NUM",
+    "TIPO",
+]
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -38,6 +76,7 @@ def carregar_usuarios():
     worksheet = abrir_planilha().worksheet(ABA_USUARIOS)
     df = pd.DataFrame(worksheet.get_all_records(numericise_ignore=["all"]))
     df = _limpar_dataframe(df)
+    df = _garantir_colunas(df, COLUNAS_USUARIOS)
 
     if "Codigo" in df.columns:
         df = df[df["Codigo"].astype(str).str.strip() != ""]
@@ -77,7 +116,7 @@ def carregar_ordens():
         frames.append(df)
 
     if not frames:
-        return pd.DataFrame()
+        return _ordens_vazias()
 
     ordens = pd.concat(frames, ignore_index=True, sort=False)
     return _padronizar_ordens(ordens)
@@ -92,7 +131,7 @@ def carregar_historico():
     worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
     values = worksheet.get_all_values()
     if not values:
-        return pd.DataFrame()
+        return _historico_vazio()
 
     headers = [str(coluna).strip() for coluna in values[0]]
     rows = []
@@ -107,7 +146,7 @@ def carregar_historico():
     df = pd.DataFrame(rows)
     df = _limpar_dataframe(df)
     if df.empty:
-        return df
+        return _historico_vazio()
 
     colunas = {
         "USUARIO_RESPONSAVEL": _encontrar_coluna(df, ["USUÁRIO RESPONSAVEL", "USUARIO RESPONSAVEL"]),
@@ -132,7 +171,7 @@ def carregar_historico():
     df["DATA_HORA_DT"] = pd.to_datetime(df["DATA_HORA"], dayfirst=True, errors="coerce")
     df["DATA"] = df["DATA_HORA_DT"].dt.normalize()
 
-    return df
+    return _garantir_colunas(df, COLUNAS_HISTORICO)
 
 
 def lancar_realizacao(ordem, quantidade_lancada):
@@ -201,6 +240,38 @@ def _limpar_dataframe(df):
     return df
 
 
+def _garantir_colunas(df, colunas):
+    df = df.copy()
+    for coluna in colunas:
+        if coluna not in df.columns:
+            df[coluna] = pd.Series(dtype=_dtype_coluna(coluna))
+    return df
+
+
+def _dtype_coluna(coluna):
+    if coluna in ["QUANTIDADE_NUM", "REALIZADO_NUM", "SALDO_NUM", "DIAS_ATRASO"]:
+        return "float64"
+    if coluna in ["DATA_PRIORIDADE", "DATA_HORA_DT", "DATA"]:
+        return "datetime64[ns]"
+    if coluna == "ATRASADA":
+        return "bool"
+    return "object"
+
+
+def _ordens_vazias():
+    return pd.DataFrame({
+        coluna: pd.Series(dtype=_dtype_coluna(coluna))
+        for coluna in COLUNAS_ORDENS
+    })
+
+
+def _historico_vazio():
+    return pd.DataFrame({
+        coluna: pd.Series(dtype=_dtype_coluna(coluna))
+        for coluna in COLUNAS_HISTORICO
+    })
+
+
 def _remover_linhas_de_cabecalho_repetido(df):
     if df.empty:
         return df
@@ -242,16 +313,7 @@ def _padronizar_ordens(df):
     df = df[tem_dados].copy()
 
     if df.empty:
-        df["USUARIO_RESPONSAVEL"] = pd.Series(dtype="object")
-        df["STATUS"] = pd.Series(dtype="object")
-        df["REALIZADO"] = pd.Series(dtype="object")
-        df["QUANTIDADE_NUM"] = pd.Series(dtype="float64")
-        df["REALIZADO_NUM"] = pd.Series(dtype="float64")
-        df["SALDO_NUM"] = pd.Series(dtype="float64")
-        df["DATA_PRIORIDADE"] = pd.Series(dtype="datetime64[ns]")
-        df["DIAS_ATRASO"] = pd.Series(dtype="float64")
-        df["ATRASADA"] = pd.Series(dtype="bool")
-        return df
+        return _garantir_colunas(df, COLUNAS_ORDENS)
 
     df["USUARIO_RESPONSAVEL"] = df["USUARIO_RESPONSAVEL"].replace("", "Sem responsavel")
     df["STATUS"] = df["STATUS"].replace("", "Sem status")
@@ -263,7 +325,7 @@ def _padronizar_ordens(df):
     df["DIAS_ATRASO"] = (pd.Timestamp.today().normalize() - df["DATA_PRIORIDADE"]).dt.days
     df["ATRASADA"] = (df["DIAS_ATRASO"] > 0) & (df["STATUS"].str.upper() != "OK")
 
-    return df
+    return _garantir_colunas(df, COLUNAS_ORDENS)
 
 
 def _vincular_pecas_a_ordem(df):

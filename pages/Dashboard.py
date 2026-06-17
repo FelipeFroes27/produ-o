@@ -1369,8 +1369,14 @@ def render_tabela_resumo(programacao, historico):
         )
 
 
-ordens = carregar_ordens()
-historico = preparar_historico(carregar_historico())
+try:
+    ordens = carregar_ordens()
+    historico = preparar_historico(carregar_historico())
+except Exception as exc:
+    st.error("Nao foi possivel carregar os dados do dashboard.")
+    st.caption(str(exc))
+    st.stop()
+
 programacao = filtrar_programacao(ordens)
 
 st.markdown('<div class="dashboard-top-spacer"></div>', unsafe_allow_html=True)
