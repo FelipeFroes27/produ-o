@@ -889,7 +889,6 @@ def render_programados_produto(programacao, historico):
         programacao.groupby(["COD_PRODUTO", "PRODUTO"], as_index=False)
         .agg(Quantidade=("QUANTIDADE_NUM", "sum"), Ordens=("OP", "count"))
         .sort_values(["Quantidade", "Ordens"], ascending=False)
-        .head(12)
     )
     realizado_produtos = (
         historico.groupby(["CODIGO", "PRODUTO"], as_index=False)
@@ -898,7 +897,15 @@ def render_programados_produto(programacao, historico):
         if not historico.empty
         else pd.DataFrame(columns=["COD_PRODUTO", "PRODUTO", "Realizado"])
     )
-    produtos = produtos.merge(realizado_produtos, on=["COD_PRODUTO", "PRODUTO"], how="left").fillna({"Realizado": 0})
+    produtos = produtos.merge(realizado_produtos, on=["COD_PRODUTO", "PRODUTO"], how="outer")
+    produtos["Quantidade"] = produtos["Quantidade"].fillna(produtos["Realizado"]).fillna(0)
+    produtos["Realizado"] = produtos["Realizado"].fillna(0)
+    produtos["Ordens"] = produtos["Ordens"].fillna(0)
+    produtos = (
+        produtos[(produtos["Quantidade"] > 0) | (produtos["Realizado"] > 0)]
+        .sort_values(["Quantidade", "Realizado", "Ordens"], ascending=False)
+        .head(12)
+    )
     if produtos.empty:
         render_chart("Itens programados no periodo", "chart_programados_produto", vazio="Sem itens programados no periodo.")
         return
