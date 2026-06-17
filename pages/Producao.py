@@ -7,7 +7,7 @@ import plotly.express as px
 import streamlit as st
 
 from utils.display_mode import ativar_modo_exibicao, render_menu_lateral
-from utils.sheets import carregar_ordens, carregar_resumo, carregar_usuarios, lancar_realizacao
+from utils.sheets import carregar_ordens, carregar_resumo, carregar_usuarios, lancar_inicio_ordem, lancar_realizacao
 
 
 st.set_page_config(
@@ -22,6 +22,7 @@ render_menu_lateral()
 
 CORES = ["#2563eb", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4"]
 ICONES_BOTOES = {
+    "inicio": "start-up.png",
     "consulta": "informacoes.png",
     "conclusao": "verificado.png",
 }
@@ -689,7 +690,7 @@ def render_ordem_card(linha, ordens_usuario):
     aplicar_estilo_card(key_card, cor_risco(linha))
     with st.container(border=True, key=key_card):
         st.markdown(f'<span class="{classe_risco(linha)}"></span>', unsafe_allow_html=True)
-        col_info, col_saldo, col_acoes = st.columns([7.2, .9, .95], vertical_alignment="center")
+        col_info, col_saldo, col_acoes = st.columns([7.0, .85, 1.25], vertical_alignment="center")
 
         with col_info:
             st.markdown(
@@ -721,15 +722,27 @@ def render_ordem_card(linha, ordens_usuario):
             )
 
         with col_acoes:
-            acao_1, acao_2 = st.columns(2, gap="small")
+            acao_1, acao_2, acao_3 = st.columns(3, gap="small")
             with acao_1:
+                key_inicio = f"inicio_{chave_css}"
+                aplicar_icone_botao(key_inicio, ICONES_BOTOES["inicio"])
+                st.markdown('<div class="start-button">', unsafe_allow_html=True)
+                if st.button("Iniciar", key=key_inicio, help="Registrar inicio da ordem"):
+                    try:
+                        lancar_inicio_ordem(linha)
+                    except Exception as exc:
+                        st.error(str(exc))
+                    else:
+                        st.success("Inicio registrado no historico.")
+                st.markdown("</div>", unsafe_allow_html=True)
+            with acao_2:
                 key_consulta = f"consulta_{chave_css}"
                 aplicar_icone_botao(key_consulta, ICONES_BOTOES["consulta"])
                 st.markdown('<div class="consult-button">', unsafe_allow_html=True)
                 if st.button("Consultar", key=key_consulta, help="Consultar ordem"):
                     modal_consulta(linha, ordens_usuario)
                 st.markdown("</div>", unsafe_allow_html=True)
-            with acao_2:
+            with acao_3:
                 key_conclusao = f"conclusao_{chave_css}"
                 aplicar_icone_botao(key_conclusao, ICONES_BOTOES["conclusao"])
                 st.markdown('<div class="finish-button">', unsafe_allow_html=True)

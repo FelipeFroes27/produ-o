@@ -49,6 +49,7 @@ COLUNAS_HISTORICO = [
     "QUANTIDADE",
     "QUANTIDADE_NUM",
     "TIPO",
+    "ACAO",
 ]
 
 SCOPES = [
@@ -156,6 +157,7 @@ def carregar_historico():
         "PRODUTO": _encontrar_coluna(df, ["PRODUTO"]),
         "QUANTIDADE": _encontrar_coluna(df, ["QUANTIDADE"]),
         "TIPO": _encontrar_coluna(df, ["TIPO"]),
+        "ACAO": _encontrar_coluna(df, ["A\u00c7\u00c3O", "ACAO"]),
     }
 
     for nome_padrao, coluna_origem in colunas.items():
@@ -194,12 +196,16 @@ def lancar_realizacao(ordem, quantidade_lancada):
     novo_realizado = realizado_atual + quantidade_lancada
 
     worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(novo_realizado))
-    registrar_historico(ordem, quantidade_lancada)
+    registrar_historico(ordem, quantidade_lancada, "Fim")
 
     carregar_ordens.clear()
 
 
-def registrar_historico(ordem, quantidade_lancada):
+def lancar_inicio_ordem(ordem):
+    registrar_historico(ordem, 0, "Inicio")
+
+
+def registrar_historico(ordem, quantidade_lancada, acao):
     worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
     headers = worksheet.row_values(1)
     data_hora = datetime.now(FUSO_BRASILIA).strftime("%d/%m/%Y %H:%M:%S")
@@ -221,6 +227,8 @@ def registrar_historico(ordem, quantidade_lancada):
             linha.append(_formatar_numero(quantidade_lancada))
         elif header_normalizado == "TIPO":
             linha.append(str(ordem.get("ABA_ORIGEM", "")))
+        elif header_normalizado == "ACAO":
+            linha.append(str(acao))
         else:
             linha.append("")
 

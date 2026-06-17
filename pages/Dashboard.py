@@ -626,6 +626,7 @@ def preparar_historico(historico):
         "QUANTIDADE",
         "QUANTIDADE_NUM",
         "TIPO",
+        "ACAO",
     ]
     if historico.empty:
         return pd.DataFrame(columns=colunas)
@@ -638,6 +639,16 @@ def preparar_historico(historico):
     historico["USUARIO_RESPONSAVEL"] = historico["USUARIO_RESPONSAVEL"].replace("", "Sem responsavel")
     historico["TIPO"] = historico["TIPO"].replace("", "Sem tipo")
     return historico
+
+
+def historico_realizado(historico):
+    if historico.empty:
+        return historico
+    if "ACAO" not in historico.columns:
+        return historico
+
+    acao = historico["ACAO"].fillna("").astype(str).str.strip().str.upper()
+    return historico[(acao == "FIM") | ((acao == "") & (historico["QUANTIDADE_NUM"] > 0))].copy()
 
 
 def formatar_numero(valor):
@@ -882,7 +893,7 @@ def render_ranking_produzido(historico):
 
 
 def render_programados_produto(programacao, historico):
-    if programacao.empty:
+    if programacao.empty and historico.empty:
         render_chart("Itens programados no periodo", "chart_programados_produto", vazio="Sem itens programados no periodo.")
         return
 
@@ -890,6 +901,8 @@ def render_programados_produto(programacao, historico):
         programacao.groupby(["COD_PRODUTO", "PRODUTO"], as_index=False)
         .agg(Quantidade=("QUANTIDADE_NUM", "sum"), Ordens=("OP", "count"))
         .sort_values(["Quantidade", "Ordens"], ascending=False)
+        if not programacao.empty
+        else pd.DataFrame(columns=["COD_PRODUTO", "PRODUTO", "Quantidade", "Ordens"])
     )
     realizado_produtos = (
         historico.groupby(["CODIGO", "PRODUTO"], as_index=False)
@@ -1394,7 +1407,8 @@ with lateral:
             carregar_historico.clear()
             st.rerun()
         programacao, historico, contexto_periodo = aplicar_filtros(programacao, historico)
-        render_metricas(programacao, historico)
+        historico_fim = historico_realizado(historico)
+        render_metricas(programacao, historico_fim)
 
 with graficos:
-    render_graficos(programacao, historico, contexto_periodo)
+    render_graficos(programacao, historico_fim, contexto_periodo)
