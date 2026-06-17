@@ -34,9 +34,9 @@ def aplicar_estilo():
         .block-container,
         [data-testid="stMainBlockContainer"] {
             max-width: 1880px !important;
-            padding-top: .72rem !important;
-            padding-left: 1.05rem !important;
-            padding-right: 1.05rem !important;
+            padding-top: 1.65rem !important;
+            padding-left: 1.25rem !important;
+            padding-right: 1.25rem !important;
             padding-bottom: 1.1rem !important;
         }
 
@@ -96,8 +96,8 @@ def aplicar_estilo():
         }
 
         .dashboard-top-spacer {
-            height: 10px;
-            min-height: 10px;
+            height: 14px;
+            min-height: 14px;
         }
 
         .side-title {
@@ -185,7 +185,7 @@ def aplicar_estilo():
 
         div[data-testid="stHorizontalBlock"],
         div[data-testid="stVerticalBlock"] {
-            gap: .22cm !important;
+            gap: .32cm !important;
         }
 
         div[data-testid="stVerticalBlockBorderWrapper"],
@@ -209,7 +209,7 @@ def aplicar_estilo():
             border-radius: 8px;
             background: #ffffff;
             padding: 8px 9px;
-            margin: 0 0 8px 0;
+            margin: 0 0 9px 0;
             box-sizing: border-box;
         }
 
@@ -217,9 +217,10 @@ def aplicar_estilo():
             border: 2px solid #000000 !important;
             border-radius: 8px !important;
             background: #ffffff !important;
-            padding: 9px 11px 11px 11px !important;
+            padding: 12px 12px 14px 12px !important;
             min-height: 0;
-            height: fit-content !important;
+            height: auto !important;
+            min-height: calc((360px * 2) + .64cm + 2px) !important;
             align-self: flex-start !important;
             box-sizing: border-box;
         }
@@ -1529,7 +1530,7 @@ programacao = filtrar_programacao(ordens)
 
 st.markdown('<div class="dashboard-top-spacer"></div>', unsafe_allow_html=True)
 
-lateral, graficos = st.columns([1.15, 6.85])
+lateral, graficos = st.columns([1.28, 6.72], gap="medium")
 
 with lateral:
     with st.container(key="dashboard_lateral"):
