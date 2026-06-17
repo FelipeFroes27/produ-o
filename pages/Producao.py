@@ -716,11 +716,18 @@ def render_ordem_card(linha, ordens_usuario):
     codigo = str(linha["COD_PRODUTO"]) or "Sem codigo"
     status = str(linha["STATUS"]) or "Sem status"
     em_andamento = bool(linha.get("EM_ANDAMENTO", False))
-    badge_andamento = '<span class="order-badge">Em andamento</span>' if em_andamento else ""
+    badges = [
+        f'<span class="order-badge">Qtd. {escape(numero(linha["QUANTIDADE_NUM"]))}</span>',
+        f'<span class="order-badge">Realizado {escape(numero(linha["REALIZADO_NUM"]))}</span>',
+        f'<span class="order-badge">Status {escape(status)}</span>',
+    ]
+    if em_andamento:
+        badges.append('<span class="order-badge">Em andamento</span>')
+    badges_html = "".join(badges)
     aplicar_estilo_card(key_card, cor_risco(linha))
     with st.container(border=True, key=key_card):
         st.markdown(f'<span class="{classe_risco(linha)}"></span>', unsafe_allow_html=True)
-        col_info, col_saldo, col_acoes = st.columns([7.0, .85, 1.25], vertical_alignment="center")
+        col_info, col_saldo, col_acoes = st.columns([7.2, .9, .95], vertical_alignment="center")
 
         with col_info:
             st.markdown(
@@ -731,10 +738,7 @@ def render_ordem_card(linha, ordens_usuario):
                         {escape(str(linha["ABA_ORIGEM"]))} | Cod. {escape(codigo)} | {escape(resumo_prazo(linha))}
                     </span>
                     <div class="order-badges">
-                        <span class="order-badge">Qtd. {escape(numero(linha["QUANTIDADE_NUM"]))}</span>
-                        <span class="order-badge">Realizado {escape(numero(linha["REALIZADO_NUM"]))}</span>
-                        <span class="order-badge">Status {escape(status)}</span>
-                        {badge_andamento}
+                        {badges_html}
                     </div>
                 </div>
                 """,
