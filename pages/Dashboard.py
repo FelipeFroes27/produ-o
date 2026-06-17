@@ -33,8 +33,11 @@ def aplicar_estilo():
 
         .block-container,
         [data-testid="stMainBlockContainer"] {
-            padding-top: 1.05rem !important;
-            padding-bottom: 1.25rem !important;
+            max-width: 1880px !important;
+            padding-top: .72rem !important;
+            padding-left: 1.05rem !important;
+            padding-right: 1.05rem !important;
+            padding-bottom: 1.1rem !important;
         }
 
         [data-testid="stSidebar"] {
@@ -93,8 +96,8 @@ def aplicar_estilo():
         }
 
         .dashboard-top-spacer {
-            height: 22px;
-            min-height: 22px;
+            height: 10px;
+            min-height: 10px;
         }
 
         .side-title {
@@ -109,7 +112,7 @@ def aplicar_estilo():
         .side-label {
             margin: 10px 0 6px 0;
             color: #000000;
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 850;
         }
 
@@ -205,8 +208,8 @@ def aplicar_estilo():
             border: 2px solid #000000;
             border-radius: 8px;
             background: #ffffff;
-            padding: 6px 8px;
-            margin: 0 0 7px 0;
+            padding: 8px 9px;
+            margin: 0 0 8px 0;
             box-sizing: border-box;
         }
 
@@ -232,14 +235,14 @@ def aplicar_estilo():
             justify-content: space-between;
             gap: 6px;
             color: #000000;
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 850;
             line-height: 1.15;
             white-space: nowrap;
         }
 
         .metric-line strong {
-            font-size: 16px;
+            font-size: 18px;
             font-weight: 900;
             white-space: nowrap;
         }
@@ -396,7 +399,7 @@ def aplicar_estilo():
         }
 
         .empty-chart {
-            height: 215px;
+            height: 279px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -436,9 +439,9 @@ def aplicar_estilo():
         }
 
         .st-key-dashboard_atualizar_dados button {
-            min-height: 34px !important;
+            min-height: 38px !important;
             margin: 0 0 8px 0 !important;
-            font-size: 12px !important;
+            font-size: 13px !important;
         }
         </style>
         """,
@@ -640,11 +643,13 @@ def render_metricas(programacao, historico):
     programado = programacao["QUANTIDADE_NUM"].sum() if not programacao.empty else 0
     realizado = historico["QUANTIDADE_NUM"].sum() if not historico.empty else 0
     atrasadas = int(programacao["ATRASADA"].sum()) if not programacao.empty else 0
+    pendente = programacao["SALDO_NUM"].sum() if not programacao.empty else 0
 
     metricas = [
         ("Ordens programadas", total_ordens),
         ("Qtd. programada", formatar_numero(programado)),
         ("Qtd. realizada", formatar_numero(realizado)),
+        ("Qtd. pendente", formatar_numero(pendente)),
         ("Ordens atrasadas", atrasadas),
     ]
 
@@ -662,35 +667,45 @@ def render_metricas(programacao, historico):
 
 def grafico_base(fig):
     fig.update_layout(
-        height=236,
-        margin=dict(l=42, r=10, t=6, b=34),
+        height=300,
+        margin=dict(l=48, r=18, t=20, b=42),
         plot_bgcolor="#ffffff",
         paper_bgcolor="#ffffff",
-        font=dict(color="#000000", family="Arial", size=10),
+        font=dict(color="#000000", family="Arial", size=11),
         legend_title_text="",
         bargap=0.22,
-        legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0, font=dict(size=10)),
+        legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0, font=dict(size=11)),
     )
-    fig.update_xaxes(showgrid=False, linecolor="#000000", tickfont=dict(color="#000000", size=10), title=None)
-    fig.update_yaxes(gridcolor="#e6e6e6", linecolor="#000000", tickfont=dict(color="#000000", size=10), title=None)
+    fig.update_xaxes(showgrid=False, linecolor="#000000", tickfont=dict(color="#000000", size=11), title=None)
+    fig.update_yaxes(gridcolor="#e6e6e6", linecolor="#000000", tickfont=dict(color="#000000", size=11), title=None)
     fig.update_traces(marker_line_color="#000000", marker_line_width=1.2)
+    return fig
+
+
+def aplicar_rotulos_barras(fig):
+    fig.update_traces(
+        textposition="outside",
+        textfont=dict(color="#000000", size=12, family="Arial"),
+        cliponaxis=False,
+    )
+    fig.update_layout(uniformtext_minsize=10, uniformtext_mode="show")
     return fig
 
 
 def grafico_pizza_base(fig):
     fig.update_layout(
-        height=236,
-        margin=dict(l=16, r=16, t=4, b=28),
+        height=300,
+        margin=dict(l=20, r=20, t=6, b=34),
         paper_bgcolor="#ffffff",
         plot_bgcolor="#ffffff",
-        font=dict(color="#000000", family="Arial", size=10),
+        font=dict(color="#000000", family="Arial", size=11),
         legend_title_text="",
-        legend=dict(orientation="h", yanchor="top", y=-0.02, xanchor="center", x=0.5, font=dict(size=10)),
+        legend=dict(orientation="h", yanchor="top", y=-0.02, xanchor="center", x=0.5, font=dict(size=11)),
     )
     fig.update_traces(
         textposition="inside",
         textinfo="percent",
-        insidetextfont=dict(size=10),
+        insidetextfont=dict(size=11),
         marker=dict(line=dict(color="#000000", width=1.2)),
     )
     return fig
@@ -704,12 +719,12 @@ def render_chart(titulo, key, fig=None, vazio="Sem dados para este grafico."):
 
     components.html(
         f"""
-        <div style="border:2px solid #000000;border-radius:8px;background:#ffffff;padding:9px 11px 5px 11px;height:278px;box-sizing:border-box;overflow:hidden;font-family:Arial,sans-serif;">
-            <div style="font-size:13px;font-weight:900;color:#000000;margin:0 0 4px 0;line-height:1.1;">{titulo}</div>
-            <div style="height:246px;">{corpo}</div>
+        <div style="border:2px solid #000000;border-radius:8px;background:#ffffff;padding:10px 12px 6px 12px;height:346px;box-sizing:border-box;overflow:hidden;font-family:Arial,sans-serif;">
+            <div style="font-size:14px;font-weight:900;color:#000000;margin:0 0 5px 0;line-height:1.1;">{titulo}</div>
+            <div style="height:309px;">{corpo}</div>
         </div>
         """,
-        height=286,
+        height=354,
         scrolling=False,
     )
 
@@ -774,21 +789,21 @@ def render_ranking_produzido(historico):
                 border: 2px solid #000;
                 border-radius: 8px;
                 background: #fff;
-                height: 278px;
-                padding: 9px 11px 8px 11px;
+                height: 346px;
+                padding: 10px 12px 9px 12px;
                 overflow: hidden;
             }}
             .title {{
-                font-size: 13px;
+                font-size: 14px;
                 font-weight: 900;
-                margin: 0 0 8px 0;
+                margin: 0 0 9px 0;
                 line-height: 1.1;
             }}
             .rank-list {{
                 display: flex;
                 flex-direction: column;
                 gap: 7px;
-                max-height: 238px;
+                max-height: 296px;
                 overflow-y: auto;
                 padding-right: 4px;
             }}
@@ -849,9 +864,156 @@ def render_ranking_produzido(historico):
             <div class="rank-list">{corpo}</div>
         </div>
         """,
-        height=286,
+        height=354,
         scrolling=False,
     )
+
+
+def render_programados_produto(programacao):
+    if programacao.empty:
+        render_chart("Itens programados no periodo", "chart_programados_produto", vazio="Sem itens programados no periodo.")
+        return
+
+    produtos = (
+        programacao.groupby(["COD_PRODUTO", "PRODUTO"], as_index=False)
+        .agg(Quantidade=("QUANTIDADE_NUM", "sum"), Ordens=("OP", "count"))
+        .sort_values(["Quantidade", "Ordens"], ascending=False)
+        .head(12)
+    )
+    if produtos.empty:
+        render_chart("Itens programados no periodo", "chart_programados_produto", vazio="Sem itens programados no periodo.")
+        return
+
+    maior_valor = max(float(produtos["Quantidade"].max()), 1)
+    itens = []
+    for linha in produtos.itertuples(index=False):
+        codigo = escape(str(linha.COD_PRODUTO) or "Sem codigo")
+        produto = escape(str(linha.PRODUTO) or "Produto sem descricao")
+        quantidade_num = float(linha.Quantidade)
+        quantidade = formatar_numero(quantidade_num)
+        ordens = int(linha.Ordens)
+        largura = max(7, min(100, (quantidade_num / maior_valor) * 100))
+        itens.append(
+            f"""
+            <div class="product-row">
+                <div class="product-top">
+                    <div class="product-name" title="{produto}">{produto}</div>
+                    <div class="product-qty">{quantidade}</div>
+                </div>
+                <div class="product-meta">Cod. {codigo} | {ordens} ordem(ns)</div>
+                <div class="product-track"><div class="product-fill" style="width:{largura}%;"></div></div>
+            </div>
+            """
+        )
+
+    components.html(
+        f"""
+        <style>
+            * {{ box-sizing: border-box; }}
+            body {{ margin: 0; font-family: Arial, sans-serif; color: #000; }}
+            .card {{
+                border: 2px solid #000;
+                border-radius: 8px;
+                background: #fff;
+                height: 346px;
+                padding: 10px 12px 9px 12px;
+                overflow: hidden;
+            }}
+            .title {{
+                font-size: 14px;
+                font-weight: 900;
+                margin: 0 0 9px 0;
+                line-height: 1.1;
+            }}
+            .product-list {{
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                max-height: 296px;
+                overflow-y: auto;
+                padding-right: 4px;
+            }}
+            .product-list::-webkit-scrollbar {{ width: 8px; }}
+            .product-list::-webkit-scrollbar-track {{
+                border: 1px solid #000;
+                border-radius: 999px;
+                background: #fff;
+            }}
+            .product-list::-webkit-scrollbar-thumb {{
+                border: 1px solid #000;
+                border-radius: 999px;
+                background: #6fb6ff;
+            }}
+            .product-row {{
+                border: 2px solid #000;
+                border-radius: 8px;
+                padding: 7px 9px;
+                background: #fff;
+            }}
+            .product-top {{
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 10px;
+                align-items: center;
+            }}
+            .product-name {{
+                font-size: 13px;
+                font-weight: 900;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }}
+            .product-qty {{
+                font-size: 16px;
+                font-weight: 900;
+                white-space: nowrap;
+            }}
+            .product-meta {{
+                margin-top: 3px;
+                font-size: 11px;
+                font-weight: 800;
+                color: #333;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }}
+            .product-track {{
+                height: 8px;
+                margin-top: 6px;
+                border: 1.5px solid #000;
+                border-radius: 999px;
+                overflow: hidden;
+                background: #fff;
+            }}
+            .product-fill {{
+                height: 100%;
+                background: #6fb6ff;
+                border-right: 1.5px solid #000;
+            }}
+        </style>
+        <div class="card">
+            <div class="title">Itens programados no periodo</div>
+            <div class="product-list">{"".join(itens)}</div>
+        </div>
+        """,
+        height=354,
+        scrolling=False,
+    )
+
+
+def categoria_prazo(linha):
+    if bool(linha.get("ATRASADA", False)):
+        return "Atrasadas"
+    data = linha.get("DATA_PRIORIDADE")
+    if pd.isna(data):
+        return "Sem data"
+    dias = (pd.to_datetime(data).date() - pd.Timestamp.today().date()).days
+    if dias == 0:
+        return "Hoje"
+    if dias <= 5:
+        return "Prox. 5 dias"
+    return "Futuras"
+
 
 def render_graficos(programacao, historico):
     col_1, col_2, col_3 = st.columns(3)
@@ -865,15 +1027,17 @@ def render_graficos(programacao, historico):
                 .agg(Ordens=("OP", "count"))
                 .sort_values("Ordens", ascending=False)
             )
+            ordens_usuario["Rotulo"] = ordens_usuario["Ordens"].map(formatar_numero)
             fig = px.bar(
                 ordens_usuario,
                 x="USUARIO_RESPONSAVEL",
                 y="Ordens",
                 color="USUARIO_RESPONSAVEL",
+                text="Rotulo",
                 color_discrete_sequence=["#6fb6ff", "#89d47f", "#f2c94c", "#ff8f70", "#b8a3ff"],
             )
-            fig = grafico_base(fig)
-            fig.update_layout(showlegend=False, margin=dict(l=42, r=10, t=4, b=48))
+            fig = aplicar_rotulos_barras(grafico_base(fig))
+            fig.update_layout(showlegend=False, margin=dict(l=48, r=18, t=24, b=52))
             fig.update_xaxes(tickangle=-35)
             render_chart("Ordens por usuario", "chart_ordens_usuario", fig)
 
@@ -919,20 +1083,22 @@ def render_graficos(programacao, historico):
                 var_name="Indicador",
                 value_name="Quantidade",
             )
+            comparativo_longo["Rotulo"] = comparativo_longo["Quantidade"].map(formatar_numero)
             fig = px.bar(
                 comparativo_longo,
                 x="USUARIO_RESPONSAVEL",
                 y="Quantidade",
                 color="Indicador",
                 barmode="group",
+                text="Rotulo",
                 color_discrete_map={
                     "Programado": "#6fb6ff",
                     "Realizado": "#89d47f",
                     "Pendente": "#ff8f70",
                 },
             )
-            fig = grafico_base(fig)
-            fig.update_layout(margin=dict(l=42, r=10, t=4, b=48))
+            fig = aplicar_rotulos_barras(grafico_base(fig))
+            fig.update_layout(margin=dict(l=48, r=18, t=24, b=52))
             fig.update_xaxes(tickangle=-35)
             render_chart("Programado x realizado", "chart_programado_realizado", fig)
 
@@ -975,11 +1141,69 @@ def render_graficos(programacao, historico):
                     por_dia,
                     x="DATA",
                     y="Realizado",
+                    text=por_dia["Realizado"].map(formatar_numero),
                     markers=True,
                     color_discrete_sequence=["#89d47f"],
                 )
-                fig.update_traces(line=dict(width=3, color="#111111"), marker=dict(size=7, line=dict(width=1.5, color="#000000")))
+                fig.update_traces(
+                    line=dict(width=3, color="#111111"),
+                    marker=dict(size=7, line=dict(width=1.5, color="#000000")),
+                    textposition="top center",
+                    textfont=dict(color="#000000", size=12, family="Arial"),
+                )
                 render_chart("Realizacoes por dia", "chart_realizacoes_dia", grafico_base(fig))
+
+    col_1, col_2, col_3 = st.columns(3)
+    with col_1:
+        render_programados_produto(programacao)
+
+    with col_2:
+        if programacao.empty:
+            render_chart("Qtd. pendente por origem", "chart_pendente_origem")
+        else:
+            pendente_origem = (
+                programacao.groupby("ABA_ORIGEM", as_index=False)
+                .agg(Pendente=("SALDO_NUM", "sum"))
+                .sort_values("Pendente", ascending=False)
+            )
+            pendente_origem["Rotulo"] = pendente_origem["Pendente"].map(formatar_numero)
+            fig = px.bar(
+                pendente_origem,
+                x="ABA_ORIGEM",
+                y="Pendente",
+                color="ABA_ORIGEM",
+                text="Rotulo",
+                color_discrete_sequence=["#ff8f70", "#6fb6ff", "#f2c94c", "#89d47f"],
+            )
+            fig = aplicar_rotulos_barras(grafico_base(fig))
+            fig.update_layout(showlegend=False, margin=dict(l=48, r=18, t=24, b=44))
+            render_chart("Qtd. pendente por origem", "chart_pendente_origem", fig)
+
+    with col_3:
+        if programacao.empty:
+            render_chart("Prazo das ordens", "chart_prazo_ordens")
+        else:
+            prazos = programacao.copy()
+            prazos["Prazo"] = prazos.apply(categoria_prazo, axis=1)
+            ordem_prazos = ["Atrasadas", "Hoje", "Prox. 5 dias", "Futuras", "Sem data"]
+            prazos = (
+                prazos.groupby("Prazo", as_index=False)
+                .agg(Ordens=("OP", "count"))
+            )
+            prazos["Prazo"] = pd.Categorical(prazos["Prazo"], categories=ordem_prazos, ordered=True)
+            prazos = prazos.sort_values("Prazo")
+            prazos["Rotulo"] = prazos["Ordens"].map(formatar_numero)
+            fig = px.bar(
+                prazos,
+                x="Prazo",
+                y="Ordens",
+                color="Prazo",
+                text="Rotulo",
+                color_discrete_sequence=["#ff8f70", "#f2c94c", "#6fb6ff", "#89d47f", "#d7dce2"],
+            )
+            fig = aplicar_rotulos_barras(grafico_base(fig))
+            fig.update_layout(showlegend=False, margin=dict(l=48, r=18, t=24, b=44))
+            render_chart("Prazo das ordens", "chart_prazo_ordens", fig)
 
 def render_tabela_resumo(programacao, historico):
     if programacao.empty:
@@ -1033,7 +1257,7 @@ programacao = filtrar_programacao(ordens)
 
 st.markdown('<div class="dashboard-top-spacer"></div>', unsafe_allow_html=True)
 
-lateral, graficos = st.columns([0.9, 6.1])
+lateral, graficos = st.columns([1.15, 6.85])
 
 with lateral:
     with st.container(key="dashboard_lateral"):
