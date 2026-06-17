@@ -7,7 +7,7 @@ import plotly.express as px
 import streamlit as st
 
 from utils.display_mode import ativar_modo_exibicao, render_menu_lateral
-from utils.sheets import carregar_ordens, carregar_resumo, carregar_usuarios, lancar_inicio_ordem, lancar_realizacao
+from utils.sheets import carregar_historico, carregar_ordens, carregar_resumo, carregar_usuarios, lancar_inicio_ordem, lancar_realizacao
 
 
 st.set_page_config(
@@ -679,6 +679,34 @@ def render_kpi(label, valor, nota):
     )
 
 
+def marcar_ordens_em_andamento(ordens, historico):
+    ordens = ordens.copy()
+    ordens["EM_ANDAMENTO"] = False
+    if ordens.empty or historico.empty or "ACAO" not in historico.columns:
+        return ordens
+
+    historico = historico.copy()
+    historico["ACAO_NORM"] = historico["ACAO"].fillna("").astype(str).str.strip().str.upper()
+    historico = historico[
+        historico["OP"].astype(str).str.strip().ne("")
+        & historico["DATA_HORA_DT"].notna()
+        & (historico["ACAO_NORM"] == "INICIO")
+    ].copy()
+    if historico.empty:
+        return ordens
+
+    em_andamento_ops = historico["OP"].astype(str).str.strip().unique().tolist()
+
+    if not em_andamento_ops:
+        return ordens
+
+    ordens["EM_ANDAMENTO"] = (
+        ordens["OP"].astype(str).str.strip().isin(em_andamento_ops)
+        & (ordens["SALDO_NUM"] > 0)
+    )
+    return ordens
+
+
 def render_ordem_card(linha, ordens_usuario):
     chave = f"{linha['ABA_ORIGEM']}|{linha['LINHA_PLANILHA']}"
     chave_css = f"{origem_chave(linha['ABA_ORIGEM'])}_{linha['LINHA_PLANILHA']}"
@@ -687,6 +715,8 @@ def render_ordem_card(linha, ordens_usuario):
     op = str(linha["OP"]) or "Sem OP"
     codigo = str(linha["COD_PRODUTO"]) or "Sem codigo"
     status = str(linha["STATUS"]) or "Sem status"
+    em_andamento = bool(linha.get("EM_ANDAMENTO", False))
+    badge_andamento = '<span class="order-badge">Em andamento</span>' if em_andamento else ""
     aplicar_estilo_card(key_card, cor_risco(linha))
     with st.container(border=True, key=key_card):
         st.markdown(f'<span class="{classe_risco(linha)}"></span>', unsafe_allow_html=True)
@@ -704,6 +734,7 @@ def render_ordem_card(linha, ordens_usuario):
                         <span class="order-badge">Qtd. {escape(numero(linha["QUANTIDADE_NUM"]))}</span>
                         <span class="order-badge">Realizado {escape(numero(linha["REALIZADO_NUM"]))}</span>
                         <span class="order-badge">Status {escape(status)}</span>
+                        {badge_andamento}
                     </div>
                 </div>
                 """,
@@ -733,7 +764,7 @@ def render_ordem_card(linha, ordens_usuario):
                     except Exception as exc:
                         st.error(str(exc))
                     else:
-                        st.success("Inicio registrado no historico.")
+                        st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
             with acao_2:
                 key_consulta = f"consulta_{chave_css}"
@@ -962,6 +993,8 @@ st.markdown(
 
 try:
     usuarios, ordens = carregar_resumo()
+    historico = carregar_historico()
+    ordens = marcar_ordens_em_andamento(ordens, historico)
 except Exception as exc:
     st.error("Nao foi possivel carregar a planilha Planejamento Producao.")
     st.caption(str(exc))

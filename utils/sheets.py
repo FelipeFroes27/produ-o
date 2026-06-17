@@ -203,6 +203,7 @@ def lancar_realizacao(ordem, quantidade_lancada):
 
 def lancar_inicio_ordem(ordem):
     registrar_historico(ordem, 0, "Inicio")
+    carregar_historico.clear()
 
 
 def registrar_historico(ordem, quantidade_lancada, acao):
