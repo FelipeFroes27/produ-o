@@ -26,6 +26,11 @@ def aplicar_estilo():
     st.markdown(
         """
         <style>
+        :root {
+            --dashboard-gap: .3cm;
+            --dashboard-card-height: 360px;
+        }
+
         .stApp {
             background: #ffffff;
             color: #000000;
@@ -34,7 +39,7 @@ def aplicar_estilo():
         .block-container,
         [data-testid="stMainBlockContainer"] {
             max-width: 1880px !important;
-            padding-top: 1.65rem !important;
+            padding-top: 1.8rem !important;
             padding-left: 1.25rem !important;
             padding-right: 1.25rem !important;
             padding-bottom: 1.1rem !important;
@@ -96,8 +101,8 @@ def aplicar_estilo():
         }
 
         .dashboard-top-spacer {
-            height: 14px;
-            min-height: 14px;
+            height: 18px;
+            min-height: 18px;
         }
 
         .side-title {
@@ -185,7 +190,7 @@ def aplicar_estilo():
 
         div[data-testid="stHorizontalBlock"],
         div[data-testid="stVerticalBlock"] {
-            gap: .32cm !important;
+            gap: var(--dashboard-gap) !important;
         }
 
         div[data-testid="stVerticalBlockBorderWrapper"],
@@ -220,9 +225,10 @@ def aplicar_estilo():
             padding: 12px 12px 14px 12px !important;
             min-height: 0;
             height: auto !important;
-            min-height: calc((360px * 2) + .64cm + 2px) !important;
+            min-height: calc((var(--dashboard-card-height) * 3) + (var(--dashboard-gap) * 2) + 4px) !important;
             align-self: flex-start !important;
             box-sizing: border-box;
+            margin-top: 0 !important;
         }
 
         .st-key-dashboard_lateral > div {
@@ -334,7 +340,7 @@ def aplicar_estilo():
         .st-key-dashboard_lateral div[data-testid="stSelectbox"],
         .st-key-dashboard_lateral div[data-testid="stMultiSelect"],
         .st-key-dashboard_lateral div[data-testid="stDateInput"] {
-            margin-bottom: 8px !important;
+            margin-bottom: var(--dashboard-gap) !important;
         }
 
         .st-key-dashboard_lateral div[data-testid="stMultiSelect"] div[data-baseweb="select"] {
@@ -1341,7 +1347,7 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
     historico_leadtime = historico if historico_leadtime is None else historico_leadtime
     leadtime = calcular_leadtime(historico_leadtime)
 
-    col_1, col_2, col_3 = st.columns(3)
+    col_1, col_2, col_3 = st.columns(3, gap="small")
 
     with col_1:
         if programacao.empty:
@@ -1427,7 +1433,7 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
             fig.update_xaxes(tickangle=-35)
             render_chart("Programado x realizado", "chart_programado_realizado", fig)
 
-    col_1, col_2, col_3 = st.columns(3)
+    col_1, col_2, col_3 = st.columns(3, gap="small")
     with col_1:
         if programacao.empty:
             render_chart("Ordens por origem", "chart_ordens_origem")
@@ -1452,7 +1458,7 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
     with col_3:
         render_realizacoes_periodo(historico, contexto_periodo)
 
-    col_1, col_2, col_3 = st.columns(3)
+    col_1, col_2, col_3 = st.columns(3, gap="small")
     with col_1:
         render_programados_produto(programacao, historico)
 
@@ -1530,7 +1536,7 @@ programacao = filtrar_programacao(ordens)
 
 st.markdown('<div class="dashboard-top-spacer"></div>', unsafe_allow_html=True)
 
-lateral, graficos = st.columns([1.28, 6.72], gap="medium")
+lateral, graficos = st.columns([1.28, 6.72], gap="small", vertical_alignment="top")
 
 with lateral:
     with st.container(key="dashboard_lateral"):
