@@ -742,6 +742,19 @@ def marcar_ordens_duplicadas(ordens):
     return ordens
 
 
+def ocultar_repeticoes_duplicadas(ordens):
+    if ordens.empty or "DUPLICADA_PROGRAMACAO" not in ordens.columns:
+        return ordens
+
+    chaves = ["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO", "USUARIO_RESPONSAVEL"]
+    if not all(coluna in ordens.columns for coluna in chaves):
+        return ordens
+
+    duplicadas = ordens[ordens["DUPLICADA_PROGRAMACAO"]].drop_duplicates(subset=chaves, keep="first")
+    normais = ordens[~ordens["DUPLICADA_PROGRAMACAO"]]
+    return pd.concat([normais, duplicadas], ignore_index=True, sort=False)
+
+
 def render_ordem_card(linha, ordens_usuario):
     chave = f"{linha['ABA_ORIGEM']}|{linha['LINHA_PLANILHA']}"
     chave_css = f"{origem_chave(linha['ABA_ORIGEM'])}_{linha['LINHA_PLANILHA']}"
@@ -1099,23 +1112,24 @@ ordens_pendentes = ordens[
 ].copy()
 ordens_pendentes = marcar_ordens_duplicadas(ordens_pendentes)
 ordens_pendentes = ordenar_demanda(ordens_pendentes)
+ordens_exibicao = ordenar_demanda(ocultar_repeticoes_duplicadas(ordens_pendentes))
 
 k1, k2, k3, k4 = st.columns(4)
 with k1:
-    render_kpi("Ordens pendentes", len(ordens_pendentes), "Demandas abertas para este usuario")
+    render_kpi("Ordens pendentes", len(ordens_exibicao), "Demandas abertas para este usuario")
 with k2:
-    render_kpi("Atrasadas", int(ordens_pendentes["ATRASADA"].sum()) if not ordens_pendentes.empty else 0, "Status pendente com data vencida")
+    render_kpi("Atrasadas", int(ordens_exibicao["ATRASADA"].sum()) if not ordens_exibicao.empty else 0, "Status pendente com data vencida")
 with k3:
-    producao = int((ordens_pendentes["ABA_ORIGEM"] == "Produ\u00e7\u00e3o").sum()) if not ordens_pendentes.empty else 0
+    producao = int((ordens_exibicao["ABA_ORIGEM"] == "Produ\u00e7\u00e3o").sum()) if not ordens_exibicao.empty else 0
     render_kpi("Producao", producao, "Produtos novos para montar")
 with k4:
-    manutencao_pecas = int(ordens_pendentes["ABA_ORIGEM"].isin(["Manuten\u00e7\u00e3o", "Pe\u00e7as"]).sum()) if not ordens_pendentes.empty else 0
+    manutencao_pecas = int(ordens_exibicao["ABA_ORIGEM"].isin(["Manuten\u00e7\u00e3o", "Pe\u00e7as"]).sum()) if not ordens_exibicao.empty else 0
     render_kpi("Manutencao e pecas", manutencao_pecas, "Demandas de reparo ou falta de pecas")
 
 st.markdown('<div class="panel-title">Demandas do usuario</div>', unsafe_allow_html=True)
-if ordens_pendentes.empty:
+if ordens_exibicao.empty:
     st.markdown('<div class="empty">Nada pendente para este usuario.</div>', unsafe_allow_html=True)
 else:
     with st.container(key="cards_lista"):
-        for _, linha in ordens_pendentes.iterrows():
+        for _, linha in ordens_exibicao.iterrows():
             render_ordem_card(linha, ordens_pendentes)
