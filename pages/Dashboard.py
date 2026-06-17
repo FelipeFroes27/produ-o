@@ -101,8 +101,8 @@ def aplicar_estilo():
         }
 
         .dashboard-top-spacer {
-            height: 18px;
-            min-height: 18px;
+            height: 52px;
+            min-height: 52px;
         }
 
         .side-title {
@@ -191,6 +191,11 @@ def aplicar_estilo():
         div[data-testid="stHorizontalBlock"],
         div[data-testid="stVerticalBlock"] {
             gap: var(--dashboard-gap) !important;
+        }
+
+        .dashboard-row-gap {
+            height: var(--dashboard-gap);
+            min-height: var(--dashboard-gap);
         }
 
         div[data-testid="stVerticalBlockBorderWrapper"],
@@ -1433,6 +1438,8 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
             fig.update_xaxes(tickangle=-35)
             render_chart("Programado x realizado", "chart_programado_realizado", fig)
 
+    st.markdown('<div class="dashboard-row-gap"></div>', unsafe_allow_html=True)
+
     col_1, col_2, col_3 = st.columns(3, gap="small")
     with col_1:
         if programacao.empty:
@@ -1457,6 +1464,8 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
 
     with col_3:
         render_realizacoes_periodo(historico, contexto_periodo)
+
+    st.markdown('<div class="dashboard-row-gap"></div>', unsafe_allow_html=True)
 
     col_1, col_2, col_3 = st.columns(3, gap="small")
     with col_1:
