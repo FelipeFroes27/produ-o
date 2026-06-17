@@ -962,8 +962,11 @@ def render_detalhe(ordem, ordens_usuario, modo="consulta"):
         if saldo <= 0:
             st.success("Esta ordem nao possui saldo pendente.")
         else:
+            chave_lancamento = f"{ordem['ABA_ORIGEM']}_{ordem['LINHA_PLANILHA']}"
+            trava_lancamento = f"lancamento_em_andamento_{chave_lancamento}"
+            lancamento_em_andamento = bool(st.session_state.get(trava_lancamento, False))
             st.markdown('<div class="completion-box">', unsafe_allow_html=True)
-            with st.form(f"form_lancamento_{ordem['ABA_ORIGEM']}_{ordem['LINHA_PLANILHA']}"):
+            with st.form(f"form_lancamento_{chave_lancamento}"):
                 qtd_col, botao_col = st.columns([1, 1])
                 with qtd_col:
                     quantidade = st.number_input(
@@ -976,16 +979,26 @@ def render_detalhe(ordem, ordens_usuario, modo="consulta"):
                     )
                 with botao_col:
                     st.markdown('<div class="completion-spacer"></div>', unsafe_allow_html=True)
-                    confirmar = st.form_submit_button("Confirmar realizacao", use_container_width=True)
+                    confirmar = st.form_submit_button(
+                        "Lancamento em andamento..." if lancamento_em_andamento else "Confirmar realizacao",
+                        use_container_width=True,
+                        disabled=lancamento_em_andamento,
+                    )
             st.markdown('</div>', unsafe_allow_html=True)
 
             if confirmar:
+                if st.session_state.get(trava_lancamento, False):
+                    st.warning("Lancamento ja esta em andamento.")
+                    return
+                st.session_state[trava_lancamento] = True
                 try:
                     lancar_realizacao(ordem, quantidade)
                 except Exception as exc:
+                    st.session_state.pop(trava_lancamento, None)
                     st.error(str(exc))
                 else:
                     st.success("Realizacao registrada na ordem e no historico.")
+                    st.session_state.pop(trava_lancamento, None)
                     st.session_state.pop("ordem_selecionada", None)
                     st.session_state.pop("acao_ordem", None)
                     st.rerun()
