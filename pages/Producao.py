@@ -727,7 +727,7 @@ def render_ordem_card(linha, ordens_usuario):
     aplicar_estilo_card(key_card, cor_risco(linha))
     with st.container(border=True, key=key_card):
         st.markdown(f'<span class="{classe_risco(linha)}"></span>', unsafe_allow_html=True)
-        col_info, col_saldo, col_acoes = st.columns([7.2, .9, .95], vertical_alignment="center")
+        col_info, col_saldo, col_acoes = st.columns([6.75, .85, 1.45], vertical_alignment="center")
 
         with col_info:
             st.markdown(
