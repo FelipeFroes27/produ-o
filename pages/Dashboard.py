@@ -1062,6 +1062,170 @@ def render_programados_produto(programacao, historico):
     )
 
 
+def formatar_duracao_horas(horas):
+    horas = max(float(horas or 0), 0)
+    minutos_totais = int(round(horas * 60))
+    dias = minutos_totais // (24 * 60)
+    minutos_restantes = minutos_totais % (24 * 60)
+    horas_restantes = minutos_restantes // 60
+    minutos = minutos_restantes % 60
+
+    partes = []
+    if dias:
+        partes.append(f"{dias} dia{'s' if dias != 1 else ''}")
+    if horas_restantes or dias:
+        partes.append(f"{horas_restantes} hora{'s' if horas_restantes != 1 else ''}")
+    partes.append(f"{minutos} min")
+    return " ".join(partes)
+
+
+def calcular_leadtime(historico):
+    colunas = ["USUARIO_RESPONSAVEL", "CODIGO", "PRODUTO", "OP", "Leadtime_horas"]
+    if historico.empty or "ACAO" not in historico.columns:
+        return pd.DataFrame(columns=colunas)
+
+    dados = historico.copy()
+    dados["ACAO_NORM"] = dados["ACAO"].fillna("").astype(str).str.strip().str.upper()
+    dados = dados[
+        dados["OP"].astype(str).str.strip().ne("")
+        & dados["DATA_HORA_DT"].notna()
+        & dados["ACAO_NORM"].isin(["INICIO", "FIM"])
+    ].copy()
+    if dados.empty:
+        return pd.DataFrame(columns=colunas)
+
+    chaves = ["USUARIO_RESPONSAVEL", "CODIGO", "PRODUTO", "OP"]
+    inicio = (
+        dados[dados["ACAO_NORM"] == "INICIO"]
+        .groupby(chaves, dropna=False)["DATA_HORA_DT"]
+        .min()
+        .rename("Inicio")
+    )
+    fim = (
+        dados[(dados["ACAO_NORM"] == "FIM") & (dados["QUANTIDADE_NUM"] > 0)]
+        .groupby(chaves, dropna=False)["DATA_HORA_DT"]
+        .max()
+        .rename("Fim")
+    )
+    leadtime = pd.concat([inicio, fim], axis=1).dropna(subset=["Inicio", "Fim"]).reset_index()
+    if leadtime.empty:
+        return pd.DataFrame(columns=colunas)
+
+    leadtime = leadtime[leadtime["Fim"] >= leadtime["Inicio"]].copy()
+    leadtime["Leadtime_horas"] = (leadtime["Fim"] - leadtime["Inicio"]).dt.total_seconds() / 3600
+    return leadtime[colunas]
+
+
+def render_leadtime_tabela(titulo, leadtime, coluna_nome, vazio):
+    if leadtime.empty:
+        render_chart(titulo, f"chart_{titulo}", vazio=vazio)
+        return
+
+    resumo = (
+        leadtime.groupby(coluna_nome, as_index=False)
+        .agg(Media_horas=("Leadtime_horas", "mean"), Ordens=("OP", "count"))
+        .sort_values(["Media_horas", "Ordens"], ascending=[True, False])
+        .head(10)
+    )
+    if resumo.empty:
+        render_chart(titulo, f"chart_{titulo}", vazio=vazio)
+        return
+
+    linhas = []
+    for linha in resumo.itertuples(index=False):
+        nome = escape(str(getattr(linha, coluna_nome)) or "Sem identificacao")
+        duracao = escape(formatar_duracao_horas(linha.Media_horas))
+        ordens = int(linha.Ordens)
+        linhas.append(
+            f"""
+            <div class="lead-row">
+                <div class="lead-name" title="{nome}">{nome}</div>
+                <div class="lead-time">{duracao}</div>
+                <div class="lead-count">{ordens} ordem(ns)</div>
+            </div>
+            """
+        )
+
+    components.html(
+        f"""
+        <style>
+            * {{ box-sizing: border-box; }}
+            body {{ margin: 0; font-family: Arial, sans-serif; color: #000; }}
+            .card {{
+                border: 2px solid #000;
+                border-radius: 8px;
+                background: #fff;
+                height: 360px;
+                padding: 10px 12px 9px 12px;
+                overflow: hidden;
+            }}
+            .title {{
+                font-size: 14px;
+                font-weight: 900;
+                margin: 0 0 9px 0;
+                line-height: 1.1;
+            }}
+            .lead-list {{
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                max-height: 310px;
+                overflow-y: auto;
+                padding-right: 4px;
+            }}
+            .lead-list::-webkit-scrollbar {{ width: 8px; }}
+            .lead-list::-webkit-scrollbar-track {{
+                border: 1px solid #000;
+                border-radius: 999px;
+                background: #fff;
+            }}
+            .lead-list::-webkit-scrollbar-thumb {{
+                border: 1px solid #000;
+                border-radius: 999px;
+                background: #f7d154;
+            }}
+            .lead-row {{
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 6px 12px;
+                border: 2px solid #000;
+                border-radius: 8px;
+                background: #fff;
+                padding: 8px 10px;
+            }}
+            .lead-name {{
+                grid-column: 1;
+                font-size: 13px;
+                font-weight: 900;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }}
+            .lead-time {{
+                grid-column: 2;
+                grid-row: 1 / span 2;
+                align-self: center;
+                font-size: 15px;
+                font-weight: 900;
+                white-space: nowrap;
+            }}
+            .lead-count {{
+                grid-column: 1;
+                font-size: 11px;
+                font-weight: 800;
+                color: #333;
+            }}
+        </style>
+        <div class="card">
+            <div class="title">{titulo}</div>
+            <div class="lead-list">{"".join(linhas)}</div>
+        </div>
+        """,
+        height=368,
+        scrolling=False,
+    )
+
+
 def categoria_prazo(linha):
     if bool(linha.get("ATRASADA", False)):
         return "Atrasadas"
@@ -1172,7 +1336,10 @@ def render_realizacoes_periodo(historico, contexto_periodo):
     render_chart("Realizacoes por dia", "chart_realizacoes_periodo", grafico_base(fig), travado=True)
 
 
-def render_graficos(programacao, historico, contexto_periodo):
+def render_graficos(programacao, historico, contexto_periodo, historico_leadtime=None):
+    historico_leadtime = historico if historico_leadtime is None else historico_leadtime
+    leadtime = calcular_leadtime(historico_leadtime)
+
     col_1, col_2, col_3 = st.columns(3)
 
     with col_1:
@@ -1289,52 +1456,20 @@ def render_graficos(programacao, historico, contexto_periodo):
         render_programados_produto(programacao, historico)
 
     with col_2:
-        if programacao.empty:
-            render_chart("Qtd. pendente por origem", "chart_pendente_origem")
-        else:
-            pendente_origem = (
-                programacao.groupby("ABA_ORIGEM", as_index=False)
-                .agg(Pendente=("SALDO_NUM", "sum"))
-                .sort_values("Pendente", ascending=False)
-            )
-            pendente_origem["Rotulo"] = pendente_origem["Pendente"].map(formatar_numero)
-            fig = px.bar(
-                pendente_origem,
-                x="ABA_ORIGEM",
-                y="Pendente",
-                color="ABA_ORIGEM",
-                text="Rotulo",
-                color_discrete_sequence=["#ff8f70", "#6fb6ff", "#f2c94c", "#89d47f"],
-            )
-            fig = aplicar_rotulos_barras(grafico_base(fig))
-            fig.update_layout(showlegend=False, margin=dict(l=48, r=18, t=24, b=44))
-            render_chart("Qtd. pendente por origem", "chart_pendente_origem", fig)
+        render_leadtime_tabela(
+            "Tempo medio por usuario",
+            leadtime,
+            "USUARIO_RESPONSAVEL",
+            "Aguardando ordens com inicio e fim.",
+        )
 
     with col_3:
-        if programacao.empty:
-            render_chart("Prazo das ordens", "chart_prazo_ordens")
-        else:
-            prazos = programacao.copy()
-            prazos["Prazo"] = prazos.apply(categoria_prazo, axis=1)
-            ordem_prazos = ["Atrasadas", "Hoje", "Prox. 5 dias", "Futuras", "Sem data"]
-            prazos = (
-                prazos.groupby("Prazo", as_index=False)
-                .agg(Ordens=("OP", "count"))
-            )
-            prazos["Prazo"] = pd.Categorical(prazos["Prazo"], categories=ordem_prazos, ordered=True)
-            prazos = prazos.sort_values("Prazo")
-            prazos["Rotulo"] = prazos["Ordens"].map(formatar_numero)
-            fig = px.bar(
-                prazos,
-                x="Prazo",
-                y="Ordens",
-                color="Prazo",
-                text="Rotulo",
-                color_discrete_sequence=["#ff8f70", "#f2c94c", "#6fb6ff", "#89d47f", "#d7dce2"],
-            )
-            fig = aplicar_rotulos_barras(grafico_base(fig))
-            fig.update_layout(showlegend=False, margin=dict(l=48, r=18, t=24, b=44))
-            render_chart("Prazo das ordens", "chart_prazo_ordens", fig)
+        render_leadtime_tabela(
+            "Tempo medio por produto",
+            leadtime,
+            "PRODUTO",
+            "Aguardando produtos com inicio e fim.",
+        )
 
 def render_tabela_resumo(programacao, historico):
     if programacao.empty:
@@ -1411,4 +1546,4 @@ with lateral:
         render_metricas(programacao, historico_fim)
 
 with graficos:
-    render_graficos(programacao, historico_fim, contexto_periodo)
+    render_graficos(programacao, historico_fim, contexto_periodo, historico)
