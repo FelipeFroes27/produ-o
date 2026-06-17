@@ -530,6 +530,7 @@ def aplicar_filtros(programacao, historico):
     datas_programacao = programacao["DATA_PRIORIDADE"].dropna() if "DATA_PRIORIDADE" in programacao else pd.Series(dtype="datetime64[ns]")
     datas_historico = historico["DATA"].dropna() if "DATA" in historico else pd.Series(dtype="datetime64[ns]")
     datas_disponiveis = pd.concat([datas_programacao, datas_historico], ignore_index=True).dropna()
+    datas_disponiveis = pd.to_datetime(datas_disponiveis, errors="coerce").dropna()
 
     modo_data = st.selectbox("Periodo", ["Tudo", "Mes inteiro", "Dia especifico", "Intervalo"])
     data_inicio = None
