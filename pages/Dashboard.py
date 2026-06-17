@@ -1514,7 +1514,6 @@ def montar_realizacoes_periodo_html(historico, contexto_periodo):
 def render_graficos(programacao, historico, contexto_periodo, historico_leadtime=None):
     historico_leadtime = historico if historico_leadtime is None else historico_leadtime
     leadtime = calcular_leadtime(historico_leadtime)
-    ordem_filtrada = bool(contexto_periodo.get("ordem_filtrada", False))
 
     cards = []
 
@@ -1634,8 +1633,8 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
             leadtime,
             "PRODUTO",
             "Aguardando produtos com inicio e fim.",
-            "Leadtime_horas" if ordem_filtrada else "Leadtime_item_horas",
-            total_por_quantidade=not ordem_filtrada,
+            "Leadtime_item_horas",
+            total_por_quantidade=True,
         )
     )
     render_dashboard_grid(cards)
