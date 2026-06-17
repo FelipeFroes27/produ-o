@@ -1436,7 +1436,7 @@ def montar_realizacoes_periodo_html(historico, contexto_periodo):
             historico_com_hora["DATA_HORA_DT"].dt.hour
             + (historico_com_hora["DATA_HORA_DT"].dt.minute / 60)
         )
-        historico_com_hora = historico_com_hora[(hora_decimal >= 8) & (hora_decimal < 18)].copy()
+        historico_com_hora = historico_com_hora[(hora_decimal >= 8) & (hora_decimal < 19)].copy()
         if historico_com_hora.empty:
             return montar_chart_html("Realizacoes por hora", vazio="Sem lancamentos entre 08h e 18h.")
 
