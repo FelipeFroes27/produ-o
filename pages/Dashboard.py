@@ -399,7 +399,7 @@ def aplicar_estilo():
         }
 
         .empty-chart {
-            height: 279px;
+            height: 293px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -589,9 +589,17 @@ def aplicar_filtros(programacao, historico):
         programacao = programacao.iloc[0:0]
         historico = historico.iloc[0:0]
 
+    contexto_periodo = {
+        "modo_data": modo_data,
+        "data_inicio": data_inicio,
+        "data_fim": data_fim,
+    }
+
     if data_inicio is not None and data_fim is not None:
         data_inicio = pd.Timestamp(data_inicio).normalize()
         data_fim = pd.Timestamp(data_fim).normalize()
+        contexto_periodo["data_inicio"] = data_inicio
+        contexto_periodo["data_fim"] = data_fim
         if "DATA_PRIORIDADE" in programacao:
             programacao = programacao[
                 (programacao["DATA_PRIORIDADE"] >= data_inicio)
@@ -603,7 +611,7 @@ def aplicar_filtros(programacao, historico):
                 & (historico["DATA"] <= data_fim)
             ]
 
-    return programacao, historico
+    return programacao, historico, contexto_periodo
 
 def preparar_historico(historico):
     colunas = [
@@ -719,12 +727,12 @@ def render_chart(titulo, key, fig=None, vazio="Sem dados para este grafico."):
 
     components.html(
         f"""
-        <div style="border:2px solid #000000;border-radius:8px;background:#ffffff;padding:10px 12px 6px 12px;height:346px;box-sizing:border-box;overflow:hidden;font-family:Arial,sans-serif;">
+        <div style="border:2px solid #000000;border-radius:8px;background:#ffffff;padding:10px 12px 6px 12px;height:360px;box-sizing:border-box;overflow:hidden;font-family:Arial,sans-serif;">
             <div style="font-size:14px;font-weight:900;color:#000000;margin:0 0 5px 0;line-height:1.1;">{titulo}</div>
-            <div style="height:309px;">{corpo}</div>
+            <div style="height:323px;">{corpo}</div>
         </div>
         """,
-        height=354,
+        height=368,
         scrolling=False,
     )
 
@@ -789,7 +797,7 @@ def render_ranking_produzido(historico):
                 border: 2px solid #000;
                 border-radius: 8px;
                 background: #fff;
-                height: 346px;
+                height: 360px;
                 padding: 10px 12px 9px 12px;
                 overflow: hidden;
             }}
@@ -803,7 +811,7 @@ def render_ranking_produzido(historico):
                 display: flex;
                 flex-direction: column;
                 gap: 7px;
-                max-height: 296px;
+                max-height: 310px;
                 overflow-y: auto;
                 padding-right: 4px;
             }}
@@ -864,7 +872,7 @@ def render_ranking_produzido(historico):
             <div class="rank-list">{corpo}</div>
         </div>
         """,
-        height=354,
+        height=368,
         scrolling=False,
     )
 
@@ -915,7 +923,7 @@ def render_programados_produto(programacao):
                 border: 2px solid #000;
                 border-radius: 8px;
                 background: #fff;
-                height: 346px;
+                height: 360px;
                 padding: 10px 12px 9px 12px;
                 overflow: hidden;
             }}
@@ -929,7 +937,7 @@ def render_programados_produto(programacao):
                 display: flex;
                 flex-direction: column;
                 gap: 8px;
-                max-height: 296px;
+                max-height: 310px;
                 overflow-y: auto;
                 padding-right: 4px;
             }}
@@ -996,7 +1004,7 @@ def render_programados_produto(programacao):
             <div class="product-list">{"".join(itens)}</div>
         </div>
         """,
-        height=354,
+        height=368,
         scrolling=False,
     )
 
@@ -1015,7 +1023,103 @@ def categoria_prazo(linha):
     return "Futuras"
 
 
-def render_graficos(programacao, historico):
+def render_realizacoes_periodo(historico, contexto_periodo):
+    historico_com_data = historico[historico["DATA"].notna()] if not historico.empty else pd.DataFrame()
+    if historico_com_data.empty:
+        render_chart("Realizacoes por dia", "chart_realizacoes_periodo")
+        return
+
+    if contexto_periodo.get("modo_data") == "Dia especifico":
+        historico_com_hora = historico_com_data[historico_com_data["DATA_HORA_DT"].notna()].copy()
+        if historico_com_hora.empty:
+            render_chart("Realizacoes por hora", "chart_realizacoes_periodo", vazio="Sem horario nos lancamentos do dia.")
+            return
+
+        hora_decimal = (
+            historico_com_hora["DATA_HORA_DT"].dt.hour
+            + (historico_com_hora["DATA_HORA_DT"].dt.minute / 60)
+        )
+        historico_com_hora = historico_com_hora[(hora_decimal >= 8) & (hora_decimal < 18)].copy()
+        if historico_com_hora.empty:
+            render_chart("Realizacoes por hora", "chart_realizacoes_periodo", vazio="Sem lancamentos entre 08h e 18h.")
+            return
+
+        hora_decimal = (
+            historico_com_hora["DATA_HORA_DT"].dt.hour
+            + (historico_com_hora["DATA_HORA_DT"].dt.minute / 60)
+        )
+        historico_com_hora["FAIXA_INICIO"] = (((hora_decimal - 8) // 2) * 2 + 8).astype(int)
+        historico_com_hora["Faixa"] = historico_com_hora["FAIXA_INICIO"].map(lambda hora: f"{hora:02d}h-{hora + 2:02d}h")
+
+        faixas = [f"{hora:02d}h-{hora + 2:02d}h" for hora in range(8, 18, 2)]
+        por_hora = (
+            historico_com_hora.groupby("Faixa", as_index=False)
+            .agg(Realizado=("QUANTIDADE_NUM", "sum"))
+            .set_index("Faixa")
+            .reindex(faixas, fill_value=0)
+            .reset_index()
+        )
+        por_hora["Rotulo"] = por_hora["Realizado"].map(formatar_numero)
+        fig = px.line(
+            por_hora,
+            x="Faixa",
+            y="Realizado",
+            text="Rotulo",
+            markers=True,
+            color_discrete_sequence=["#111111"],
+        )
+        fig.update_traces(
+            line=dict(width=3, color="#111111"),
+            marker=dict(size=8, line=dict(width=1.5, color="#000000"), color="#89d47f"),
+            textposition="top center",
+            textfont=dict(color="#000000", size=12, family="Arial"),
+        )
+        fig.update_yaxes(rangemode="tozero")
+        render_chart("Realizacoes por hora", "chart_realizacoes_periodo", grafico_base(fig))
+        return
+
+    por_dia = (
+        historico_com_data.groupby("DATA", as_index=False)
+        .agg(Realizado=("QUANTIDADE_NUM", "sum"))
+        .sort_values("DATA")
+    )
+
+    data_inicio = contexto_periodo.get("data_inicio")
+    data_fim = contexto_periodo.get("data_fim")
+    if data_inicio is not None and data_fim is not None:
+        dias = pd.date_range(pd.Timestamp(data_inicio), pd.Timestamp(data_fim), freq="D")
+        por_dia = (
+            por_dia.set_index("DATA")
+            .reindex(dias, fill_value=0)
+            .rename_axis("DATA")
+            .reset_index()
+        )
+
+    if len(por_dia) < 2:
+        render_chart("Realizacoes por dia", "chart_realizacoes_periodo", vazio="Aguardando mais lancamentos.")
+        return
+
+    por_dia["Dia"] = pd.to_datetime(por_dia["DATA"]).dt.strftime("%d/%m")
+    por_dia["Rotulo"] = por_dia["Realizado"].map(formatar_numero)
+    fig = px.line(
+        por_dia,
+        x="Dia",
+        y="Realizado",
+        text="Rotulo",
+        markers=True,
+        color_discrete_sequence=["#111111"],
+    )
+    fig.update_traces(
+        line=dict(width=3, color="#111111"),
+        marker=dict(size=8, line=dict(width=1.5, color="#000000"), color="#89d47f"),
+        textposition="top center",
+        textfont=dict(color="#000000", size=12, family="Arial"),
+    )
+    fig.update_yaxes(rangemode="tozero")
+    render_chart("Realizacoes por dia", "chart_realizacoes_periodo", grafico_base(fig))
+
+
+def render_graficos(programacao, historico, contexto_periodo):
     col_1, col_2, col_3 = st.columns(3)
 
     with col_1:
@@ -1125,33 +1229,7 @@ def render_graficos(programacao, historico):
         render_ranking_produzido(historico)
 
     with col_3:
-        historico_com_data = historico[historico["DATA"].notna()] if not historico.empty else pd.DataFrame()
-        if historico_com_data.empty:
-            render_chart("Realizacoes por dia", "chart_realizacoes_dia")
-        else:
-            por_dia = (
-                historico_com_data.groupby("DATA", as_index=False)
-                .agg(Realizado=("QUANTIDADE_NUM", "sum"))
-                .sort_values("DATA")
-            )
-            if len(por_dia) < 2:
-                render_chart("Realizacoes por dia", "chart_realizacoes_dia", vazio="Aguardando mais lancamentos.")
-            else:
-                fig = px.area(
-                    por_dia,
-                    x="DATA",
-                    y="Realizado",
-                    text=por_dia["Realizado"].map(formatar_numero),
-                    markers=True,
-                    color_discrete_sequence=["#89d47f"],
-                )
-                fig.update_traces(
-                    line=dict(width=3, color="#111111"),
-                    marker=dict(size=7, line=dict(width=1.5, color="#000000")),
-                    textposition="top center",
-                    textfont=dict(color="#000000", size=12, family="Arial"),
-                )
-                render_chart("Realizacoes por dia", "chart_realizacoes_dia", grafico_base(fig))
+        render_realizacoes_periodo(historico, contexto_periodo)
 
     col_1, col_2, col_3 = st.columns(3)
     with col_1:
@@ -1269,8 +1347,8 @@ with lateral:
             carregar_ordens.clear()
             carregar_historico.clear()
             st.rerun()
-        programacao, historico = aplicar_filtros(programacao, historico)
+        programacao, historico, contexto_periodo = aplicar_filtros(programacao, historico)
         render_metricas(programacao, historico)
 
 with graficos:
-    render_graficos(programacao, historico)
+    render_graficos(programacao, historico, contexto_periodo)
