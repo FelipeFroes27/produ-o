@@ -1706,10 +1706,7 @@ lateral, graficos = st.columns([1.28, 6.72], gap="small", vertical_alignment="to
 
 with lateral:
     with st.container(key="dashboard_lateral"):
-        st.markdown(
-            '<div class="side-title">&#127981; Dashboard Produ&ccedil;&atilde;o</div>',
-            unsafe_allow_html=True,
-        )
+        st.image("dashboard.png", use_container_width=True)
         if st.button("Atualizar dados", key="dashboard_atualizar_dados", use_container_width=True):
             carregar_ordens.clear()
             carregar_historico.clear()
