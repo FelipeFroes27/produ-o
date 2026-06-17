@@ -876,16 +876,9 @@ def render_detalhe(ordem, ordens_usuario, modo="consulta"):
             st.markdown('</div>', unsafe_allow_html=True)
 
             if confirmar:
-                bloqueio_lancamento = f"lancamento_em_andamento_{ordem['ABA_ORIGEM']}_{ordem['LINHA_PLANILHA']}"
-                if st.session_state.get(bloqueio_lancamento):
-                    st.warning("Lancamento ja esta em andamento.")
-                    return
-
-                st.session_state[bloqueio_lancamento] = True
                 try:
                     lancar_realizacao(ordem, quantidade)
                 except Exception as exc:
-                    st.session_state[bloqueio_lancamento] = False
                     st.error(str(exc))
                 else:
                     st.success("Realizacao registrada na ordem e no historico.")
