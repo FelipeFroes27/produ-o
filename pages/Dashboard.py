@@ -1219,7 +1219,7 @@ def formatar_duracao_horas(horas):
 
 
 def calcular_leadtime(historico):
-    colunas = ["USUARIO_RESPONSAVEL", "CODIGO", "PRODUTO", "OP", "Leadtime_horas"]
+    colunas = ["USUARIO_RESPONSAVEL", "CODIGO", "PRODUTO", "OP", "Leadtime_horas", "Quantidade_movimentada", "Leadtime_item_horas"]
     if historico.empty or "ACAO" not in historico.columns:
         return pd.DataFrame(columns=colunas)
 
@@ -1246,26 +1246,42 @@ def calcular_leadtime(historico):
         .max()
         .rename("Fim")
     )
-    leadtime = pd.concat([inicio, fim], axis=1).dropna(subset=["Inicio", "Fim"]).reset_index()
+    quantidade = (
+        dados[(dados["ACAO_NORM"] == "FIM") & (dados["QUANTIDADE_NUM"] > 0)]
+        .groupby(chaves, dropna=False)["QUANTIDADE_NUM"]
+        .sum()
+        .rename("Quantidade_movimentada")
+    )
+    leadtime = pd.concat([inicio, fim, quantidade], axis=1).dropna(subset=["Inicio", "Fim"]).reset_index()
     if leadtime.empty:
         return pd.DataFrame(columns=colunas)
 
     leadtime = leadtime[leadtime["Fim"] >= leadtime["Inicio"]].copy()
+    leadtime["Quantidade_movimentada"] = pd.to_numeric(leadtime["Quantidade_movimentada"], errors="coerce").fillna(0)
     leadtime["Leadtime_horas"] = (leadtime["Fim"] - leadtime["Inicio"]).dt.total_seconds() / 3600
+    leadtime["Leadtime_item_horas"] = leadtime.apply(
+        lambda linha: linha["Leadtime_horas"] / linha["Quantidade_movimentada"]
+        if linha["Quantidade_movimentada"] > 0
+        else linha["Leadtime_horas"],
+        axis=1,
+    )
     return leadtime[colunas]
 
 
-def render_leadtime_tabela(titulo, leadtime, coluna_nome, vazio):
-    components.html(montar_leadtime_tabela_html(titulo, leadtime, coluna_nome, vazio), height=368, scrolling=False)
+def render_leadtime_tabela(titulo, leadtime, coluna_nome, vazio, coluna_tempo="Leadtime_horas"):
+    components.html(montar_leadtime_tabela_html(titulo, leadtime, coluna_nome, vazio, coluna_tempo), height=368, scrolling=False)
 
 
-def montar_leadtime_tabela_html(titulo, leadtime, coluna_nome, vazio):
+def montar_leadtime_tabela_html(titulo, leadtime, coluna_nome, vazio, coluna_tempo="Leadtime_horas"):
     if leadtime.empty:
         return montar_chart_html(titulo, vazio=vazio)
 
+    if coluna_tempo not in leadtime.columns:
+        coluna_tempo = "Leadtime_horas"
+
     resumo = (
         leadtime.groupby(coluna_nome, as_index=False)
-        .agg(Media_horas=("Leadtime_horas", "mean"), Ordens=("OP", "count"))
+        .agg(Media_horas=(coluna_tempo, "mean"), Ordens=("OP", "count"))
         .sort_values(["Media_horas", "Ordens"], ascending=[True, False])
         .head(10)
     )
@@ -1585,6 +1601,7 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
             leadtime,
             "USUARIO_RESPONSAVEL",
             "Aguardando ordens com inicio e fim.",
+            "Leadtime_horas",
         )
     )
     cards.append(
@@ -1593,6 +1610,7 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
             leadtime,
             "PRODUTO",
             "Aguardando produtos com inicio e fim.",
+            "Leadtime_item_horas",
         )
     )
     render_dashboard_grid(cards)
