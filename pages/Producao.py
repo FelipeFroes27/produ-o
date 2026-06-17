@@ -736,7 +736,7 @@ def marcar_ordens_duplicadas(ordens):
             return ordens
 
     chave_normalizada = ordens[chaves].fillna("").astype(str).apply(lambda coluna: coluna.str.strip().str.upper())
-    contagem = chave_normalizada.groupby(chaves, dropna=False).transform("size").iloc[:, 0]
+    contagem = chave_normalizada.groupby(chaves, dropna=False).transform("size")
     ordens["DUPLICADA_PROGRAMACAO"] = contagem > 1
     ordens["QTD_DUPLICADAS_PROGRAMACAO"] = contagem
     return ordens
