@@ -2,14 +2,17 @@ import pandas as pd
 import plotly.express as px
 import streamlit.components.v1 as components
 import streamlit as st
+from datetime import time
 from html import escape
 
 from utils.display_mode import ativar_modo_exibicao, render_menu_lateral
-from utils.sheets import carregar_bd_produtos, carregar_historico, carregar_ordens
+from utils.sheets import carregar_bd_produtos, carregar_feriados, carregar_historico, carregar_ordens
 
 
 SENHA_DASHBOARD = "Trendx2026"
 COLUNAS_META_PRODUTO = ["CATEGORIA", "MARCA", "GRUPO"]
+JANELAS_TRABALHO_PADRAO = [(time(8, 0), time(13, 0)), (time(14, 0), time(18, 0))]
+JANELAS_TRABALHO_SEXTA = [(time(8, 0), time(13, 0)), (time(14, 0), time(17, 0))]
 
 
 st.set_page_config(
@@ -1226,7 +1229,48 @@ def formatar_duracao_horas(horas):
     return " ".join(partes)
 
 
-def calcular_leadtime(historico):
+def montar_datas_feriados(feriados):
+    if feriados is None or feriados.empty or "DATA" not in feriados.columns:
+        return set()
+
+    datas = pd.to_datetime(feriados["DATA"], dayfirst=True, errors="coerce").dropna()
+    return {data.date() for data in datas}
+
+
+def janelas_trabalho_do_dia(dia, feriados):
+    data = dia.date()
+    if dia.weekday() >= 5 or data in feriados:
+        return []
+    if dia.weekday() == 4:
+        return JANELAS_TRABALHO_SEXTA
+    return JANELAS_TRABALHO_PADRAO
+
+
+def calcular_horas_comerciais(inicio, fim, feriados=None):
+    inicio = pd.to_datetime(inicio, errors="coerce")
+    fim = pd.to_datetime(fim, errors="coerce")
+    if pd.isna(inicio) or pd.isna(fim) or fim <= inicio:
+        return 0.0
+
+    feriados = feriados or set()
+    total_segundos = 0.0
+    dia = inicio.normalize()
+    ultimo_dia = fim.normalize()
+
+    while dia <= ultimo_dia:
+        for hora_inicio, hora_fim in janelas_trabalho_do_dia(dia, feriados):
+            janela_inicio = pd.Timestamp.combine(dia.date(), hora_inicio)
+            janela_fim = pd.Timestamp.combine(dia.date(), hora_fim)
+            inicio_util = max(inicio, janela_inicio)
+            fim_util = min(fim, janela_fim)
+            if fim_util > inicio_util:
+                total_segundos += (fim_util - inicio_util).total_seconds()
+        dia += pd.Timedelta(days=1)
+
+    return total_segundos / 3600
+
+
+def calcular_leadtime(historico, feriados=None):
     colunas = ["USUARIO_RESPONSAVEL", "CODIGO", "PRODUTO", "OP", "Leadtime_horas", "Quantidade_movimentada", "Leadtime_item_horas"]
     if historico.empty or "ACAO" not in historico.columns:
         return pd.DataFrame(columns=colunas)
@@ -1266,7 +1310,11 @@ def calcular_leadtime(historico):
 
     leadtime = leadtime[leadtime["Fim"] >= leadtime["Inicio"]].copy()
     leadtime["Quantidade_movimentada"] = pd.to_numeric(leadtime["Quantidade_movimentada"], errors="coerce").fillna(0)
-    leadtime["Leadtime_horas"] = (leadtime["Fim"] - leadtime["Inicio"]).dt.total_seconds() / 3600
+    datas_feriados = montar_datas_feriados(feriados)
+    leadtime["Leadtime_horas"] = leadtime.apply(
+        lambda linha: calcular_horas_comerciais(linha["Inicio"], linha["Fim"], datas_feriados),
+        axis=1,
+    )
     leadtime["Leadtime_item_horas"] = leadtime.apply(
         lambda linha: linha["Leadtime_horas"] / linha["Quantidade_movimentada"]
         if linha["Quantidade_movimentada"] > 0
@@ -1523,9 +1571,9 @@ def montar_realizacoes_periodo_html(historico, contexto_periodo):
     return montar_chart_html("Realizacoes por dia", fig=fig, travado=True)
 
 
-def render_graficos(programacao, historico, contexto_periodo, historico_leadtime=None):
+def render_graficos(programacao, historico, contexto_periodo, historico_leadtime=None, feriados=None):
     historico_leadtime = historico if historico_leadtime is None else historico_leadtime
-    leadtime = calcular_leadtime(historico_leadtime)
+    leadtime = calcular_leadtime(historico_leadtime, feriados)
 
     cards = []
 
@@ -1700,6 +1748,7 @@ def render_tabela_resumo(programacao, historico):
 try:
     ordens = carregar_ordens()
     bd_produtos = carregar_bd_produtos()
+    feriados = carregar_feriados()
     historico = preparar_historico(carregar_historico())
 except Exception as exc:
     st.error("Nao foi possivel carregar os dados do dashboard.")
@@ -1721,10 +1770,11 @@ with lateral:
             carregar_ordens.clear()
             carregar_historico.clear()
             carregar_bd_produtos.clear()
+            carregar_feriados.clear()
             st.rerun()
         programacao, historico, contexto_periodo = aplicar_filtros(programacao, historico)
         historico_fim = historico_realizado(historico)
         render_metricas(programacao, historico_fim)
 
 with graficos:
-    render_graficos(programacao, historico_fim, contexto_periodo, historico)
+    render_graficos(programacao, historico_fim, contexto_periodo, historico, feriados)

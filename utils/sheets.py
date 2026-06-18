@@ -12,6 +12,7 @@ ABAS_PLANEJAMENTO = ["Produ\u00e7\u00e3o", "Manuten\u00e7\u00e3o", "Pe\u00e7as"]
 ABA_USUARIOS = "Usu\u00e1rios"
 ABA_HISTORICO = "Hist\u00f3rico"
 ABA_BD_PRODUTOS = "Bd_produtos"
+ABA_FERIADOS = "Feriados"
 FUSO_BRASILIA = timezone(timedelta(hours=-3))
 COLUNAS_USUARIOS = ["Codigo", "Nome"]
 COLUNAS_ORDENS = [
@@ -59,6 +60,7 @@ COLUNAS_PRODUTOS = [
     "MARCA",
     "GRUPO",
 ]
+COLUNAS_FERIADOS = ["DATA"]
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -213,6 +215,46 @@ def carregar_bd_produtos():
     return _padronizar_produtos(df)
 
 
+@st.cache_data(ttl=180)
+def carregar_feriados():
+    try:
+        worksheet = abrir_planilha().worksheet(ABA_FERIADOS)
+    except Exception:
+        return _feriados_vazios()
+
+    values = worksheet.get_all_values()
+    if not values:
+        return _feriados_vazios()
+
+    headers = [str(coluna).strip() for coluna in values[0]]
+    rows = []
+    for row in values[1:]:
+        registro = {
+            header: str(row[pos]).strip() if pos < len(row) else ""
+            for pos, header in enumerate(headers)
+            if header
+        }
+        rows.append(registro)
+
+    df = pd.DataFrame(rows)
+    df = _limpar_dataframe(df)
+    if df.empty:
+        return _feriados_vazios()
+
+    coluna_data = _encontrar_coluna(df, ["DATA"])
+    if coluna_data is None:
+        return _feriados_vazios()
+
+    feriados = pd.DataFrame({
+        "DATA": pd.to_datetime(df[coluna_data], dayfirst=True, errors="coerce").dt.normalize()
+    })
+    feriados = feriados[feriados["DATA"].notna()].drop_duplicates(subset=["DATA"]).copy()
+    if feriados.empty:
+        return _feriados_vazios()
+
+    return _garantir_colunas(feriados, COLUNAS_FERIADOS)
+
+
 def lancar_realizacao(ordem, quantidade_lancada):
     aba_origem = str(ordem["ABA_ORIGEM"])
     linha_planilha = int(ordem["LINHA_PLANILHA"])
@@ -322,6 +364,12 @@ def _produtos_vazios():
     return pd.DataFrame({
         coluna: pd.Series(dtype="object")
         for coluna in COLUNAS_PRODUTOS
+    })
+
+
+def _feriados_vazios():
+    return pd.DataFrame({
+        "DATA": pd.Series(dtype="datetime64[ns]")
     })
 
 
