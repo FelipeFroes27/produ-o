@@ -415,6 +415,21 @@ def tabela_detalhes_tempo(tempos):
     return dados
 
 
+def linhas_calculo_tempo(tempos):
+    if not tempos:
+        return []
+
+    linhas = []
+    for detalhe in tempos["detalhes"]:
+        if not detalhe.get("CONTADO"):
+            continue
+        dia = escape(str(detalhe.get("DIA", "")))
+        intervalo = escape(str(detalhe.get("INTERVALO", "")))
+        tempo = escape(str(detalhe.get("TEMPO", "")))
+        linhas.append(f"<div>{dia} - horario {intervalo} - {tempo}</div>")
+    return linhas
+
+
 aplicar_estilo()
 render_sidebar()
 
@@ -481,18 +496,9 @@ if programacao_op["COD_PRODUTO"].nunique() > 1 if not programacao_op.empty and "
 
 st.markdown('<p class="section-title">Como o tempo foi calculado</p>', unsafe_allow_html=True)
 if tempos:
-    inicio_txt = formatar_data_hora(tempos["inicio"])
-    fim_txt = formatar_data_hora(tempos["fim"])
+    linhas_tempo = linhas_calculo_tempo(tempos)
     st.markdown(
-        f"""
-        <div class="explain-box">
-            A ordem iniciou em {escape(inicio_txt)} e teve a ultima conclusao em {escape(fim_txt)}.
-            O tempo corrido entre esses dois pontos foi {escape(formatar_duracao_horas(tempos["horas_corridas"]))}.
-            Para o leadtime, o sistema contou somente {escape(formatar_duracao_horas(tempos["horas_uteis"]))}
-            de horario util. O restante, {escape(formatar_duracao_horas(tempos["horas_nao_contadas"]))},
-            ficou fora por almoco, noite, sexta apos 17h, fim de semana ou feriado.
-        </div>
-        """,
+        f'<div class="explain-box">{"".join(linhas_tempo) if linhas_tempo else "Nenhum horario util contado."}</div>',
         unsafe_allow_html=True,
     )
 else:
