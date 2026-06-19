@@ -218,13 +218,6 @@ def formatar_numero(valor):
     return str(valor).replace(".", ",")
 
 
-def formatar_data(valor):
-    data = pd.to_datetime(valor, dayfirst=True, errors="coerce")
-    if pd.isna(data):
-        return ""
-    return data.strftime("%d/%m/%Y")
-
-
 def formatar_data_hora(valor):
     data = pd.to_datetime(valor, dayfirst=True, errors="coerce")
     if pd.isna(data):
@@ -331,49 +324,6 @@ def montar_card(label, valor, nota=""):
 def render_cards(cards):
     html = '<div class="cards-grid">' + "".join(cards) + "</div>"
     st.markdown(html, unsafe_allow_html=True)
-
-
-def tabela_programacao(programacao_op):
-    if programacao_op.empty:
-        return pd.DataFrame()
-
-    colunas = [
-        "ABA_ORIGEM",
-        "LINHA_PLANILHA",
-        "USUARIO_RESPONSAVEL",
-        "STATUS",
-        "COD_PRODUTO",
-        "PRODUTO",
-        "QUANTIDADE_NUM",
-        "REALIZADO_NUM",
-        "SALDO_NUM",
-        "DATA_ABERTURA",
-        "DATA_PREVISTA",
-        "OBS",
-    ]
-    dados = programacao_op[[coluna for coluna in colunas if coluna in programacao_op.columns]].copy()
-    renomear = {
-        "ABA_ORIGEM": "Origem",
-        "LINHA_PLANILHA": "Linha",
-        "USUARIO_RESPONSAVEL": "Usuario",
-        "STATUS": "Status",
-        "COD_PRODUTO": "Codigo",
-        "PRODUTO": "Produto",
-        "QUANTIDADE_NUM": "Qtd.",
-        "REALIZADO_NUM": "Realizado",
-        "SALDO_NUM": "Saldo",
-        "DATA_ABERTURA": "Abertura",
-        "DATA_PREVISTA": "Previsao",
-        "OBS": "Obs.",
-    }
-    dados = dados.rename(columns=renomear)
-    for coluna in ["Qtd.", "Realizado", "Saldo"]:
-        if coluna in dados.columns:
-            dados[coluna] = dados[coluna].map(formatar_numero)
-    for coluna in ["Abertura", "Previsao"]:
-        if coluna in dados.columns:
-            dados[coluna] = dados[coluna].map(formatar_data)
-    return dados
 
 
 def tabela_historico(lancamentos):
@@ -496,10 +446,3 @@ if historico_tabela.empty:
     st.info("Esta OP ainda nao possui lancamentos no historico.")
 else:
     st.dataframe(historico_tabela, hide_index=True, use_container_width=True, height=300)
-
-st.markdown('<p class="section-title">Programacao vinculada a OP</p>', unsafe_allow_html=True)
-programacao_tabela = tabela_programacao(programacao_op)
-if programacao_tabela.empty:
-    st.info("Esta OP nao foi encontrada nas abas de programacao atuais.")
-else:
-    st.dataframe(programacao_tabela, hide_index=True, use_container_width=True, height=260)
