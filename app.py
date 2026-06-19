@@ -182,6 +182,7 @@ with st.sidebar:
     st.markdown("</div>", unsafe_allow_html=True)
     st.page_link("app.py", label="Inicio")
     st.page_link("pages/Producao.py", label="Producao")
+    st.page_link("pages/Historico_OP.py", label="Histórico OP")
     st.page_link("pages/Dashboard.py", label="Dashboard")
 
 logo_branco = base64.b64encode(Path("Logo Branco.bmp").read_bytes()).decode("utf-8")
@@ -205,6 +206,10 @@ st.markdown(
             <div class="home-section">
                 Producao
                 <span>Tela inicial reservada para o controle das ordens de producao.</span>
+            </div>
+            <div class="home-section">
+                Historico OP
+                <span>Consulta detalhada dos lancamentos e do tempo util por ordem.</span>
             </div>
             <div class="home-section">
                 Dashboard

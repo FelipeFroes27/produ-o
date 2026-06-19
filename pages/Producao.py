@@ -532,6 +532,7 @@ def render_sidebar():
         st.markdown("</div>", unsafe_allow_html=True)
         st.page_link("app.py", label="Inicio")
         st.page_link("pages/Producao.py", label="Producao")
+        st.page_link("pages/Historico_OP.py", label="Histórico OP")
         st.page_link("pages/Dashboard.py", label="Dashboard")
 
 

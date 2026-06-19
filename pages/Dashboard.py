@@ -2,17 +2,15 @@ import pandas as pd
 import plotly.express as px
 import streamlit.components.v1 as components
 import streamlit as st
-from datetime import time
 from html import escape
 
 from utils.display_mode import ativar_modo_exibicao, render_menu_lateral
 from utils.sheets import carregar_bd_produtos, carregar_feriados, carregar_historico, carregar_ordens
+from utils.tempo_trabalho import calcular_horas_comerciais, formatar_duracao_horas, montar_datas_feriados
 
 
 SENHA_DASHBOARD = "Trendx2026"
 COLUNAS_META_PRODUTO = ["CATEGORIA", "MARCA", "GRUPO"]
-JANELAS_TRABALHO_PADRAO = [(time(8, 0), time(13, 0)), (time(14, 0), time(18, 0))]
-JANELAS_TRABALHO_SEXTA = [(time(8, 0), time(13, 0)), (time(14, 0), time(17, 0))]
 
 
 st.set_page_config(
@@ -482,6 +480,7 @@ def render_sidebar():
         st.markdown("</div>", unsafe_allow_html=True)
         st.page_link("app.py", label="Inicio")
         st.page_link("pages/Producao.py", label="Producao")
+        st.page_link("pages/Historico_OP.py", label="Histórico OP")
         st.page_link("pages/Dashboard.py", label="Dashboard")
 
 
@@ -1210,64 +1209,6 @@ def montar_programados_produto_html(programacao, historico):
             <div class="product-list">{"".join(itens)}</div>
         </div>
         """
-
-
-def formatar_duracao_horas(horas):
-    horas = max(float(horas or 0), 0)
-    minutos_totais = int(round(horas * 60))
-    dias = minutos_totais // (24 * 60)
-    minutos_restantes = minutos_totais % (24 * 60)
-    horas_restantes = minutos_restantes // 60
-    minutos = minutos_restantes % 60
-
-    partes = []
-    if dias:
-        partes.append(f"{dias} dia{'s' if dias != 1 else ''}")
-    if horas_restantes or dias:
-        partes.append(f"{horas_restantes} hora{'s' if horas_restantes != 1 else ''}")
-    partes.append(f"{minutos} min")
-    return " ".join(partes)
-
-
-def montar_datas_feriados(feriados):
-    if feriados is None or feriados.empty or "DATA" not in feriados.columns:
-        return set()
-
-    datas = pd.to_datetime(feriados["DATA"], dayfirst=True, errors="coerce").dropna()
-    return {data.date() for data in datas}
-
-
-def janelas_trabalho_do_dia(dia, feriados):
-    data = dia.date()
-    if dia.weekday() >= 5 or data in feriados:
-        return []
-    if dia.weekday() == 4:
-        return JANELAS_TRABALHO_SEXTA
-    return JANELAS_TRABALHO_PADRAO
-
-
-def calcular_horas_comerciais(inicio, fim, feriados=None):
-    inicio = pd.to_datetime(inicio, errors="coerce")
-    fim = pd.to_datetime(fim, errors="coerce")
-    if pd.isna(inicio) or pd.isna(fim) or fim <= inicio:
-        return 0.0
-
-    feriados = feriados or set()
-    total_segundos = 0.0
-    dia = inicio.normalize()
-    ultimo_dia = fim.normalize()
-
-    while dia <= ultimo_dia:
-        for hora_inicio, hora_fim in janelas_trabalho_do_dia(dia, feriados):
-            janela_inicio = pd.Timestamp.combine(dia.date(), hora_inicio)
-            janela_fim = pd.Timestamp.combine(dia.date(), hora_fim)
-            inicio_util = max(inicio, janela_inicio)
-            fim_util = min(fim, janela_fim)
-            if fim_util > inicio_util:
-                total_segundos += (fim_util - inicio_util).total_seconds()
-        dia += pd.Timedelta(days=1)
-
-    return total_segundos / 3600
 
 
 def calcular_leadtime(historico, feriados=None):
