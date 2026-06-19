@@ -398,23 +398,6 @@ def tabela_historico(lancamentos):
     return dados
 
 
-def tabela_detalhes_tempo(tempos):
-    if not tempos:
-        return pd.DataFrame()
-
-    dados = pd.DataFrame(tempos["detalhes"])
-    if dados.empty:
-        return dados
-    dados = dados[["DIA", "PERIODO", "INTERVALO", "TEMPO", "OBS"]].rename(columns={
-        "DIA": "Dia",
-        "PERIODO": "Periodo",
-        "INTERVALO": "Intervalo",
-        "TEMPO": "Tempo",
-        "OBS": "Observacao",
-    })
-    return dados
-
-
 def linhas_calculo_tempo(tempos):
     if not tempos:
         return []
@@ -506,13 +489,6 @@ else:
         '<div class="warning-box">Ainda nao existe inicio e fim validos para calcular o tempo desta OP.</div>',
         unsafe_allow_html=True,
     )
-
-st.markdown('<p class="section-title">Detalhamento do tempo util</p>', unsafe_allow_html=True)
-detalhes_tempo = tabela_detalhes_tempo(tempos)
-if detalhes_tempo.empty:
-    st.info("Sem detalhes de tempo para exibir.")
-else:
-    st.dataframe(detalhes_tempo, hide_index=True, use_container_width=True, height=260)
 
 st.markdown('<p class="section-title">Lancamentos do historico</p>', unsafe_allow_html=True)
 historico_tabela = tabela_historico(lancamentos)
