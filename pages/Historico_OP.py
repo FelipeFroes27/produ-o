@@ -94,7 +94,18 @@ def aplicar_estilo():
             border-radius: 8px;
             background: #ffffff;
             padding: 14px 16px;
-            min-height: 104px;
+            height: 118px;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin: 10px 0 4px 0;
         }
 
         .info-label {
@@ -110,6 +121,9 @@ def aplicar_estilo():
             font-weight: 950;
             color: #000000;
             line-height: 1.1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .info-note {
@@ -117,6 +131,29 @@ def aplicar_estilo():
             font-size: 12px;
             font-weight: 700;
             color: #374151;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .filter-card {
+            border: 2px solid #000000;
+            border-radius: 8px;
+            background: #ffffff;
+            padding: 12px 14px 6px 14px;
+            margin-bottom: 10px;
+        }
+
+        @media (max-width: 1200px) {
+            .cards-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 760px) {
+            .cards-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         .section-title {
@@ -196,17 +233,33 @@ def formatar_data_hora(valor):
 
 
 def opcoes_ordens(ordens, historico):
-    valores = []
-    for base in [ordens, historico]:
-        if base is not None and not base.empty and "OP" in base.columns:
-            valores.extend(base["OP"].dropna().astype(str).str.strip().tolist())
-    return sorted({valor for valor in valores if valor})
+    opcoes = {}
+
+    if ordens is not None and not ordens.empty and {"OP", "ABA_ORIGEM"}.issubset(ordens.columns):
+        for origem, op in ordens[["ABA_ORIGEM", "OP"]].dropna().itertuples(index=False):
+            origem = chave_texto(origem)
+            op = chave_texto(op)
+            if origem and op:
+                opcoes[f"{origem} | {op}"] = {"origem": origem, "op": op}
+
+    if historico is not None and not historico.empty and {"OP", "TIPO"}.issubset(historico.columns):
+        for op, origem in historico[["OP", "TIPO"]].dropna().itertuples(index=False):
+            origem = chave_texto(origem)
+            op = chave_texto(op)
+            if origem and op:
+                opcoes.setdefault(f"{origem} | {op}", {"origem": origem, "op": op})
+
+    return sorted(opcoes), opcoes
 
 
-def filtrar_op(df, op):
+def filtrar_op(df, op, origem=None, coluna_origem=None):
     if df.empty or "OP" not in df.columns:
         return df.iloc[0:0].copy() if not df.empty else df.copy()
-    return df[df["OP"].astype(str).str.strip() == op].copy()
+
+    filtro = df["OP"].astype(str).str.strip() == op
+    if origem and coluna_origem in df.columns:
+        filtro = filtro & (df[coluna_origem].astype(str).str.strip() == origem)
+    return df[filtro].copy()
 
 
 def texto_unico(df, coluna):
@@ -262,17 +315,18 @@ def resumo_tempos(lancamentos, feriados):
     }
 
 
-def render_card(label, valor, nota=""):
-    st.markdown(
-        f"""
+def montar_card(label, valor, nota=""):
+    return f"""
         <div class="info-card">
             <p class="info-label">{escape(label)}</p>
-            <p class="info-value">{escape(str(valor))}</p>
-            <p class="info-note">{escape(str(nota))}</p>
+            <p class="info-value" title="{escape(str(valor))}">{escape(str(valor))}</p>
+            <p class="info-note" title="{escape(str(nota))}">{escape(str(nota))}</p>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    """
+
+
+def render_cards(cards):
+    st.markdown(f'<div class="cards-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
 
 
 def tabela_programacao(programacao_op):
@@ -377,15 +431,21 @@ except Exception as exc:
     st.caption(str(exc))
     st.stop()
 
-opcoes = opcoes_ordens(ordens, historico)
+opcoes, mapa_opcoes = opcoes_ordens(ordens, historico)
 if not opcoes:
     st.warning("Nenhuma ordem encontrada na programacao ou no historico.")
     st.stop()
 
-op_selecionada = st.selectbox("Ordem de producao", opcoes, key="historico_op_ordem")
+st.markdown('<div class="filter-card">', unsafe_allow_html=True)
+opcao_selecionada = st.selectbox("Ordem de producao", opcoes, key="historico_op_ordem")
+st.markdown("</div>", unsafe_allow_html=True)
 
-programacao_op = filtrar_op(ordens, op_selecionada)
-lancamentos = preparar_lancamentos(filtrar_op(historico, op_selecionada))
+ordem_selecionada = mapa_opcoes[opcao_selecionada]
+op_selecionada = ordem_selecionada["op"]
+origem_selecionada = ordem_selecionada["origem"]
+
+programacao_op = filtrar_op(ordens, op_selecionada, origem_selecionada, "ABA_ORIGEM")
+lancamentos = preparar_lancamentos(filtrar_op(historico, op_selecionada, origem_selecionada, "TIPO"))
 tempos = resumo_tempos(lancamentos, feriados)
 
 qtd_programada = programacao_op["QUANTIDADE_NUM"].sum() if not programacao_op.empty else 0
@@ -397,24 +457,19 @@ qtd_historico = (
 )
 saldo = max(qtd_programada - qtd_planilha_realizada, 0)
 
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    render_card("OP", op_selecionada, texto_unico(programacao_op if not programacao_op.empty else lancamentos, "PRODUTO"))
-with col2:
-    render_card("Quantidade programada", formatar_numero(qtd_programada), f"Saldo atual: {formatar_numero(saldo)}")
-with col3:
-    render_card("Realizado no historico", formatar_numero(qtd_historico), f"Realizado na planilha: {formatar_numero(qtd_planilha_realizada)}")
-with col4:
-    tempo_util = formatar_duracao_horas(tempos["horas_uteis"]) if tempos else "-"
-    render_card("Tempo util da OP", tempo_util, "Considera turno, sexta, feriados e fins de semana")
-
-col_a, col_b, col_c = st.columns(3)
-with col_a:
-    render_card("Responsavel", texto_unico(programacao_op if not programacao_op.empty else lancamentos, "USUARIO_RESPONSAVEL"), "")
-with col_b:
-    render_card("Status", texto_unico(programacao_op, "STATUS"), "")
-with col_c:
-    render_card("Origem", texto_unico(programacao_op if not programacao_op.empty else lancamentos, "ABA_ORIGEM"), texto_unico(lancamentos, "TIPO"))
+tempo_util = formatar_duracao_horas(tempos["horas_uteis"]) if tempos else "-"
+render_cards([
+    montar_card("Origem", origem_selecionada, "Aba da planilha usada na consulta"),
+    montar_card("OP", op_selecionada, texto_unico(programacao_op if not programacao_op.empty else lancamentos, "PRODUTO")),
+    montar_card("Quantidade programada", formatar_numero(qtd_programada), f"Saldo atual: {formatar_numero(saldo)}"),
+    montar_card("Realizado no historico", formatar_numero(qtd_historico), f"Realizado na planilha: {formatar_numero(qtd_planilha_realizada)}"),
+])
+render_cards([
+    montar_card("Tempo util da OP", tempo_util, "Considera turno, sexta, feriados e fins de semana"),
+    montar_card("Responsavel", texto_unico(programacao_op if not programacao_op.empty else lancamentos, "USUARIO_RESPONSAVEL"), ""),
+    montar_card("Status", texto_unico(programacao_op, "STATUS"), ""),
+    montar_card("Lancamentos", len(lancamentos), "Registros encontrados no historico"),
+])
 
 if programacao_op["COD_PRODUTO"].nunique() > 1 if not programacao_op.empty and "COD_PRODUTO" in programacao_op.columns else False:
     st.markdown(
