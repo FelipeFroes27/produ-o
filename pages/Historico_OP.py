@@ -388,7 +388,15 @@ if not opcoes:
     st.warning("Nenhuma ordem encontrada na programacao ou no historico.")
     st.stop()
 
-opcao_selecionada = st.selectbox("Ordem de producao", opcoes, key="historico_op_ordem")
+filtro_col, atualizar_col = st.columns([5.5, 1], vertical_alignment="bottom")
+with filtro_col:
+    opcao_selecionada = st.selectbox("Ordem de producao", opcoes, key="historico_op_ordem")
+with atualizar_col:
+    if st.button("Atualizar", key="historico_op_atualizar", use_container_width=True):
+        carregar_ordens.clear()
+        carregar_historico.clear()
+        carregar_feriados.clear()
+        st.rerun()
 
 ordem_selecionada = mapa_opcoes[opcao_selecionada]
 op_selecionada = ordem_selecionada["op"]
