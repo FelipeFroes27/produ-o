@@ -316,17 +316,21 @@ def resumo_tempos(lancamentos, feriados):
 
 
 def montar_card(label, valor, nota=""):
-    return f"""
-        <div class="info-card">
-            <p class="info-label">{escape(label)}</p>
-            <p class="info-value" title="{escape(str(valor))}">{escape(str(valor))}</p>
-            <p class="info-note" title="{escape(str(nota))}">{escape(str(nota))}</p>
-        </div>
-    """
+    label = escape(label)
+    valor = escape(str(valor))
+    nota = escape(str(nota))
+    return (
+        '<div class="info-card">'
+        f'<p class="info-label">{label}</p>'
+        f'<p class="info-value" title="{valor}">{valor}</p>'
+        f'<p class="info-note" title="{nota}">{nota}</p>'
+        "</div>"
+    )
 
 
 def render_cards(cards):
-    st.markdown(f'<div class="cards-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+    html = '<div class="cards-grid">' + "".join(cards) + "</div>"
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def tabela_programacao(programacao_op):
@@ -436,9 +440,7 @@ if not opcoes:
     st.warning("Nenhuma ordem encontrada na programacao ou no historico.")
     st.stop()
 
-st.markdown('<div class="filter-card">', unsafe_allow_html=True)
 opcao_selecionada = st.selectbox("Ordem de producao", opcoes, key="historico_op_ordem")
-st.markdown("</div>", unsafe_allow_html=True)
 
 ordem_selecionada = mapa_opcoes[opcao_selecionada]
 op_selecionada = ordem_selecionada["op"]
