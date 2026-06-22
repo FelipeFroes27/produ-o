@@ -6,7 +6,7 @@ from html import escape
 
 from utils.display_mode import ativar_modo_exibicao, render_menu_lateral
 from utils.sheets import carregar_bd_produtos, carregar_feriados, carregar_historico, carregar_ordens
-from utils.tempo_trabalho import calcular_horas_comerciais, formatar_duracao_horas, montar_datas_feriados
+from utils.tempo_trabalho import calcular_horas_comerciais_intervalos, formatar_duracao_horas, intervalos_ativos_por_lancamentos, montar_datas_feriados
 
 
 SENHA_DASHBOARD = "Trendx2026"
@@ -1221,12 +1221,14 @@ def calcular_leadtime(historico, feriados=None):
     dados = dados[
         dados["OP"].astype(str).str.strip().ne("")
         & dados["DATA_HORA_DT"].notna()
-        & dados["ACAO_NORM"].isin(["INICIO", "FIM"])
+        & dados["ACAO_NORM"].isin(["INICIO", "PAUSA", "FIM"])
     ].copy()
     if dados.empty:
         return pd.DataFrame(columns=colunas)
 
     chaves = ["USUARIO_RESPONSAVEL", "CODIGO", "PRODUTO", "OP"]
+    if "TIPO" in dados.columns:
+        chaves.append("TIPO")
     inicio = (
         dados[dados["ACAO_NORM"] == "INICIO"]
         .groupby(chaves, dropna=False)["DATA_HORA_DT"]
@@ -1252,10 +1254,16 @@ def calcular_leadtime(historico, feriados=None):
     leadtime = leadtime[leadtime["Fim"] >= leadtime["Inicio"]].copy()
     leadtime["Quantidade_movimentada"] = pd.to_numeric(leadtime["Quantidade_movimentada"], errors="coerce").fillna(0)
     datas_feriados = montar_datas_feriados(feriados)
-    leadtime["Leadtime_horas"] = leadtime.apply(
-        lambda linha: calcular_horas_comerciais(linha["Inicio"], linha["Fim"], datas_feriados),
-        axis=1,
-    )
+    horas_por_chave = {}
+    for chave, grupo in dados.groupby(chaves, dropna=False):
+        if not isinstance(chave, tuple):
+            chave = (chave,)
+        fim_grupo = grupo[(grupo["ACAO_NORM"] == "FIM") & (grupo["QUANTIDADE_NUM"] > 0)]["DATA_HORA_DT"].max()
+        intervalos = intervalos_ativos_por_lancamentos(grupo, fim_grupo)
+        horas_por_chave[chave] = calcular_horas_comerciais_intervalos(intervalos, datas_feriados)
+
+    leadtime["CHAVE_LEADTIME"] = leadtime[chaves].apply(lambda linha: tuple(linha.tolist()), axis=1)
+    leadtime["Leadtime_horas"] = leadtime["CHAVE_LEADTIME"].map(horas_por_chave).fillna(0)
     leadtime["Leadtime_item_horas"] = leadtime.apply(
         lambda linha: linha["Leadtime_horas"] / linha["Quantidade_movimentada"]
         if linha["Quantidade_movimentada"] > 0

@@ -5,7 +5,7 @@ import streamlit as st
 
 from utils.display_mode import ativar_modo_exibicao, render_menu_lateral
 from utils.sheets import carregar_feriados, carregar_historico, carregar_ordens
-from utils.tempo_trabalho import detalhar_horas_comerciais, formatar_duracao_horas, montar_datas_feriados
+from utils.tempo_trabalho import detalhar_horas_comerciais_intervalos, formatar_duracao_horas, intervalos_ativos_por_lancamentos, montar_datas_feriados
 
 
 st.set_page_config(
@@ -294,13 +294,15 @@ def resumo_tempos(lancamentos, feriados):
         return None
 
     feriados_set = montar_datas_feriados(feriados)
-    detalhes = detalhar_horas_comerciais(inicio_real, fim_real, feriados_set)
+    intervalos = intervalos_ativos_por_lancamentos(lancamentos, fim_real)
+    detalhes = detalhar_horas_comerciais_intervalos(intervalos, feriados_set)
     horas_uteis = sum(item["HORAS"] for item in detalhes if item["CONTADO"])
     horas_corridas = (fim_real - inicio_real).total_seconds() / 3600
 
     return {
         "inicio": inicio_real,
         "fim": fim_real,
+        "intervalos": intervalos,
         "horas_uteis": horas_uteis,
         "horas_corridas": horas_corridas,
         "horas_nao_contadas": max(horas_corridas - horas_uteis, 0),

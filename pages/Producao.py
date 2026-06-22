@@ -7,7 +7,7 @@ import plotly.express as px
 import streamlit as st
 
 from utils.display_mode import ativar_modo_exibicao, render_menu_lateral
-from utils.sheets import carregar_historico, carregar_ordens, carregar_resumo, carregar_usuarios, lancar_inicio_ordem, lancar_realizacao
+from utils.sheets import carregar_historico, carregar_ordens, carregar_resumo, carregar_usuarios, lancar_inicio_ordem, lancar_pausa_ordem, lancar_realizacao
 
 
 st.set_page_config(
@@ -23,6 +23,7 @@ render_menu_lateral()
 CORES = ["#2563eb", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4"]
 ICONES_BOTOES = {
     "inicio": "start-up.png",
+    "pausa": "pausa.png",
     "consulta": "informacoes.png",
     "conclusao": "verificado.png",
 }
@@ -699,6 +700,7 @@ def render_kpi(label, valor, nota):
 def marcar_ordens_em_andamento(ordens, historico):
     ordens = ordens.copy()
     ordens["EM_ANDAMENTO"] = False
+    ordens["PAUSADA"] = False
     if ordens.empty or historico.empty or "ACAO" not in historico.columns:
         return ordens
 
@@ -707,20 +709,35 @@ def marcar_ordens_em_andamento(ordens, historico):
     historico = historico[
         historico["OP"].astype(str).str.strip().ne("")
         & historico["DATA_HORA_DT"].notna()
-        & (historico["ACAO_NORM"] == "INICIO")
+        & historico["ACAO_NORM"].isin(["INICIO", "PAUSA"])
     ].copy()
     if historico.empty:
         return ordens
 
-    em_andamento_ops = historico["OP"].astype(str).str.strip().unique().tolist()
-
-    if not em_andamento_ops:
+    chaves_ordem = ["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO", "USUARIO_RESPONSAVEL"]
+    chaves_historico = ["TIPO", "OP", "CODIGO", "PRODUTO", "USUARIO_RESPONSAVEL"]
+    if not all(coluna in ordens.columns for coluna in chaves_ordem):
+        return ordens
+    if not all(coluna in historico.columns for coluna in chaves_historico):
         return ordens
 
-    ordens["EM_ANDAMENTO"] = (
-        ordens["OP"].astype(str).str.strip().isin(em_andamento_ops)
-        & (ordens["SALDO_NUM"] > 0)
+    historico["CHAVE_CONTROLE"] = historico[chaves_historico].fillna("").astype(str).apply(
+        lambda linha: "|".join(valor.strip().upper() for valor in linha),
+        axis=1,
     )
+    ultima_acao = (
+        historico.sort_values("DATA_HORA_DT")
+        .groupby("CHAVE_CONTROLE", dropna=False)["ACAO_NORM"]
+        .last()
+        .to_dict()
+    )
+    ordens["CHAVE_CONTROLE"] = ordens[chaves_ordem].fillna("").astype(str).apply(
+        lambda linha: "|".join(valor.strip().upper() for valor in linha),
+        axis=1,
+    )
+    ordens["ULTIMA_ACAO_CONTROLE"] = ordens["CHAVE_CONTROLE"].map(ultima_acao).fillna("")
+    ordens["EM_ANDAMENTO"] = (ordens["ULTIMA_ACAO_CONTROLE"] == "INICIO") & (ordens["SALDO_NUM"] > 0)
+    ordens["PAUSADA"] = (ordens["ULTIMA_ACAO_CONTROLE"] == "PAUSA") & (ordens["SALDO_NUM"] > 0)
     return ordens
 
 
@@ -765,15 +782,19 @@ def render_ordem_card(linha, ordens_usuario):
     codigo = str(linha["COD_PRODUTO"]) or "Sem codigo"
     status = str(linha["STATUS"]) or "Sem status"
     em_andamento = bool(linha.get("EM_ANDAMENTO", False))
+    pausada = bool(linha.get("PAUSADA", False))
     duplicada = bool(linha.get("DUPLICADA_PROGRAMACAO", False))
     qtd_duplicadas = int(linha.get("QTD_DUPLICADAS_PROGRAMACAO", 1) or 1)
+    status_exibido = "PAUSADO" if pausada else status
     badges = [
         f'<span class="order-badge">Qtd. {escape(numero(linha["QUANTIDADE_NUM"]))}</span>',
         f'<span class="order-badge">Realizado {escape(numero(linha["REALIZADO_NUM"]))}</span>',
-        f'<span class="order-badge">Status {escape(status)}</span>',
+        f'<span class="order-badge">Status {escape(status_exibido)}</span>',
     ]
     if em_andamento:
         badges.append('<span class="order-badge">Em andamento</span>')
+    if pausada:
+        badges.append('<span class="order-badge">Pausado</span>')
     badges_html = "".join(badges)
     alerta_duplicidade = (
         f'<div class="duplicate-alert">Esta ordem esta em {qtd_duplicadas} linhas na programacao. Corrija a planilha para liberar inicio/conclusao.</div>'
@@ -783,7 +804,7 @@ def render_ordem_card(linha, ordens_usuario):
     aplicar_estilo_card(key_card, cor_risco(linha))
     with st.container(border=True, key=key_card):
         st.markdown(f'<span class="{classe_risco(linha)}"></span>', unsafe_allow_html=True)
-        col_info, col_saldo, col_acoes = st.columns([6.75, .85, 1.45], vertical_alignment="center")
+        col_info, col_saldo, col_acoes = st.columns([6.55, .85, 1.7], vertical_alignment="center")
 
         with col_info:
             st.markdown(
@@ -814,31 +835,88 @@ def render_ordem_card(linha, ordens_usuario):
             )
 
         with col_acoes:
-            acao_1, acao_2, acao_3 = st.columns(3, gap="small")
+            acao_1, acao_2, acao_3, acao_4 = st.columns(4, gap="small")
             with acao_1:
                 key_inicio = f"inicio_{chave_css}"
+                trava_inicio = f"trava_{key_inicio}"
                 aplicar_icone_botao(key_inicio, ICONES_BOTOES["inicio"])
                 st.markdown('<div class="start-button">', unsafe_allow_html=True)
-                if st.button("Iniciar", key=key_inicio, help="Corrija a duplicidade na programacao para iniciar." if duplicada else "Registrar inicio da ordem", disabled=duplicada):
+                inicio_desabilitado = duplicada or (em_andamento and not pausada) or bool(st.session_state.get(trava_inicio, False))
+                texto_inicio = "Retomar" if pausada else "Iniciar"
+                ajuda_inicio = (
+                    "Corrija a duplicidade na programacao para iniciar."
+                    if duplicada
+                    else "A ordem ja esta em andamento."
+                    if em_andamento and not pausada
+                    else "Retomar contagem da ordem."
+                    if pausada
+                    else "Registrar inicio da ordem."
+                )
+                if st.button(texto_inicio, key=key_inicio, help=ajuda_inicio, disabled=inicio_desabilitado):
+                    if st.session_state.get(trava_inicio, False):
+                        st.warning("Lancamento ja esta em andamento.")
+                        st.markdown("</div>", unsafe_allow_html=True)
+                        return
+                    st.session_state[trava_inicio] = True
                     try:
                         lancar_inicio_ordem(linha)
                     except Exception as exc:
+                        st.session_state.pop(trava_inicio, None)
                         st.error(str(exc))
                     else:
+                        st.session_state.pop(trava_inicio, None)
                         st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
             with acao_2:
+                key_pausa = f"pausa_{chave_css}"
+                trava_pausa = f"trava_{key_pausa}"
+                aplicar_icone_botao(key_pausa, ICONES_BOTOES["pausa"])
+                st.markdown('<div class="pause-button">', unsafe_allow_html=True)
+                pausa_desabilitada = duplicada or pausada or not em_andamento or bool(st.session_state.get(trava_pausa, False))
+                ajuda_pausa = (
+                    "Corrija a duplicidade na programacao para pausar."
+                    if duplicada
+                    else "A ordem ja esta pausada."
+                    if pausada
+                    else "A ordem precisa estar em andamento para pausar."
+                    if not em_andamento
+                    else "Pausar contagem da ordem."
+                )
+                if st.button("Pausar", key=key_pausa, help=ajuda_pausa, disabled=pausa_desabilitada):
+                    if st.session_state.get(trava_pausa, False):
+                        st.warning("Lancamento ja esta em andamento.")
+                        st.markdown("</div>", unsafe_allow_html=True)
+                        return
+                    st.session_state[trava_pausa] = True
+                    try:
+                        lancar_pausa_ordem(linha)
+                    except Exception as exc:
+                        st.session_state.pop(trava_pausa, None)
+                        st.error(str(exc))
+                    else:
+                        st.session_state.pop(trava_pausa, None)
+                        st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+            with acao_3:
                 key_consulta = f"consulta_{chave_css}"
                 aplicar_icone_botao(key_consulta, ICONES_BOTOES["consulta"])
                 st.markdown('<div class="consult-button">', unsafe_allow_html=True)
                 if st.button("Consultar", key=key_consulta, help="Consultar ordem"):
                     modal_consulta(linha, ordens_usuario)
                 st.markdown("</div>", unsafe_allow_html=True)
-            with acao_3:
+            with acao_4:
                 key_conclusao = f"conclusao_{chave_css}"
                 aplicar_icone_botao(key_conclusao, ICONES_BOTOES["conclusao"])
                 st.markdown('<div class="finish-button">', unsafe_allow_html=True)
-                if st.button("Concluir", key=key_conclusao, help="Corrija a duplicidade na programacao para concluir." if duplicada else "Concluir ordem", disabled=duplicada):
+                conclusao_desabilitada = duplicada or pausada
+                ajuda_conclusao = (
+                    "Corrija a duplicidade na programacao para concluir."
+                    if duplicada
+                    else "Retome a ordem antes de concluir."
+                    if pausada
+                    else "Concluir ordem"
+                )
+                if st.button("Concluir", key=key_conclusao, help=ajuda_conclusao, disabled=conclusao_desabilitada):
                     modal_conclusao(linha, ordens_usuario)
                 st.markdown("</div>", unsafe_allow_html=True)
 

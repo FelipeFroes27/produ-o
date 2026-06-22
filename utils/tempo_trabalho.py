@@ -52,6 +52,55 @@ def calcular_horas_comerciais(inicio, fim, feriados=None):
     return sum(item["HORAS"] for item in detalhar_horas_comerciais(inicio, fim, feriados))
 
 
+def calcular_horas_comerciais_intervalos(intervalos, feriados=None):
+    return sum(
+        calcular_horas_comerciais(inicio, fim, feriados)
+        for inicio, fim in intervalos
+    )
+
+
+def detalhar_horas_comerciais_intervalos(intervalos, feriados=None):
+    detalhes = []
+    for inicio, fim in intervalos:
+        detalhes.extend(detalhar_horas_comerciais(inicio, fim, feriados))
+    return detalhes
+
+
+def intervalos_ativos_por_lancamentos(lancamentos, fim=None):
+    if lancamentos is None or lancamentos.empty:
+        return []
+
+    dados = lancamentos.copy()
+    if "ACAO_NORM" not in dados.columns:
+        dados["ACAO_NORM"] = dados["ACAO"].fillna("").astype(str).str.strip().str.upper()
+    dados["DATA_HORA_DT"] = pd.to_datetime(dados["DATA_HORA_DT"], errors="coerce")
+    dados = dados[dados["DATA_HORA_DT"].notna()].sort_values("DATA_HORA_DT")
+
+    fim = pd.to_datetime(fim, errors="coerce") if fim is not None else pd.NaT
+    if pd.notna(fim):
+        dados = dados[dados["DATA_HORA_DT"] <= fim]
+
+    intervalos = []
+    inicio_ativo = None
+
+    for linha in dados.itertuples(index=False):
+        acao = str(getattr(linha, "ACAO_NORM", "")).strip().upper()
+        data_hora = getattr(linha, "DATA_HORA_DT")
+
+        if acao == "INICIO":
+            if inicio_ativo is None:
+                inicio_ativo = data_hora
+        elif acao == "PAUSA":
+            if inicio_ativo is not None and data_hora > inicio_ativo:
+                intervalos.append((inicio_ativo, data_hora))
+            inicio_ativo = None
+
+    if pd.notna(fim) and inicio_ativo is not None and fim > inicio_ativo:
+        intervalos.append((inicio_ativo, fim))
+
+    return intervalos
+
+
 def detalhar_horas_comerciais(inicio, fim, feriados=None):
     inicio = pd.to_datetime(inicio, errors="coerce")
     fim = pd.to_datetime(fim, errors="coerce")
