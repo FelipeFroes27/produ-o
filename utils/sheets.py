@@ -273,9 +273,19 @@ def lancar_realizacao(ordem, quantidade_lancada):
         raise ValueError(f"A quantidade lancada passa do saldo pendente ({_formatar_numero(saldo)}).")
 
     novo_realizado = realizado_atual + quantidade_lancada
+    quantidade_total = float(ordem["QUANTIDADE_NUM"])
+    acao = "Fim" if novo_realizado >= quantidade_total else "Parcial"
 
     worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(novo_realizado))
-    registrar_historico(ordem, quantidade_lancada, "Fim")
+    try:
+        registrar_historico(ordem, quantidade_lancada, acao)
+    except Exception as exc:
+        try:
+            worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(realizado_atual))
+            carregar_ordens.clear()
+        except Exception:
+            pass
+        raise RuntimeError("A ordem foi restaurada porque nao foi possivel registrar o historico. Tente novamente.") from exc
 
     carregar_ordens.clear()
 

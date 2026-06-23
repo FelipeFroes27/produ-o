@@ -756,7 +756,10 @@ def historico_realizado(historico):
         return historico
 
     acao = historico["ACAO"].fillna("").astype(str).str.strip().str.upper()
-    return historico[(acao == "FIM") | ((acao == "") & (historico["QUANTIDADE_NUM"] > 0))].copy()
+    return historico[
+        acao.isin(["PARCIAL", "FIM"])
+        | ((acao == "") & (historico["QUANTIDADE_NUM"] > 0))
+    ].copy()
 
 
 def formatar_numero(valor):
@@ -1221,7 +1224,7 @@ def calcular_leadtime(historico, feriados=None):
     dados = dados[
         dados["OP"].astype(str).str.strip().ne("")
         & dados["DATA_HORA_DT"].notna()
-        & dados["ACAO_NORM"].isin(["INICIO", "PAUSA", "FIM"])
+        & dados["ACAO_NORM"].isin(["INICIO", "PAUSA", "PARCIAL", "FIM"])
     ].copy()
     if dados.empty:
         return pd.DataFrame(columns=colunas)
@@ -1242,7 +1245,7 @@ def calcular_leadtime(historico, feriados=None):
         .rename("Fim")
     )
     quantidade = (
-        dados[(dados["ACAO_NORM"] == "FIM") & (dados["QUANTIDADE_NUM"] > 0)]
+        dados[dados["ACAO_NORM"].isin(["PARCIAL", "FIM"]) & (dados["QUANTIDADE_NUM"] > 0)]
         .groupby(chaves, dropna=False)["QUANTIDADE_NUM"]
         .sum()
         .rename("Quantidade_movimentada")

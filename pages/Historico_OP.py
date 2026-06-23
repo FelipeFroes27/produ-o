@@ -411,7 +411,10 @@ tempos = resumo_tempos(lancamentos, feriados)
 qtd_programada = programacao_op["QUANTIDADE_NUM"].sum() if not programacao_op.empty else 0
 qtd_planilha_realizada = programacao_op["REALIZADO_NUM"].sum() if not programacao_op.empty else 0
 qtd_historico = (
-    lancamentos[(lancamentos["ACAO_NORM"] == "FIM") & (lancamentos["QUANTIDADE_NUM"] > 0)]["QUANTIDADE_NUM"].sum()
+    lancamentos[
+        lancamentos["ACAO_NORM"].isin(["PARCIAL", "FIM"])
+        & (lancamentos["QUANTIDADE_NUM"] > 0)
+    ]["QUANTIDADE_NUM"].sum()
     if not lancamentos.empty
     else 0
 )
