@@ -1215,7 +1215,16 @@ def montar_programados_produto_html(programacao, historico):
 
 
 def calcular_leadtime(historico, feriados=None):
-    colunas = ["USUARIO_RESPONSAVEL", "CODIGO", "PRODUTO", "OP", "Leadtime_horas", "Quantidade_movimentada", "Leadtime_item_horas"]
+    colunas = [
+        "USUARIO_RESPONSAVEL",
+        "CODIGO",
+        "PRODUTO",
+        "OP",
+        "Leadtime_horas",
+        "Leadtime_item_total_horas",
+        "Quantidade_movimentada",
+        "Leadtime_item_horas",
+    ]
     if historico.empty or "ACAO" not in historico.columns:
         return pd.DataFrame(columns=colunas)
 
@@ -1244,33 +1253,49 @@ def calcular_leadtime(historico, feriados=None):
         .max()
         .rename("Fim")
     )
+    movimento = (
+        dados[dados["ACAO_NORM"].isin(["PARCIAL", "FIM"]) & (dados["QUANTIDADE_NUM"] > 0)]
+        .groupby(chaves, dropna=False)["DATA_HORA_DT"]
+        .max()
+        .rename("Movimento")
+    )
     quantidade = (
         dados[dados["ACAO_NORM"].isin(["PARCIAL", "FIM"]) & (dados["QUANTIDADE_NUM"] > 0)]
         .groupby(chaves, dropna=False)["QUANTIDADE_NUM"]
         .sum()
         .rename("Quantidade_movimentada")
     )
-    leadtime = pd.concat([inicio, fim, quantidade], axis=1).dropna(subset=["Inicio", "Fim"]).reset_index()
+    leadtime = pd.concat([inicio, fim, movimento, quantidade], axis=1).dropna(subset=["Inicio", "Movimento"]).reset_index()
     if leadtime.empty:
         return pd.DataFrame(columns=colunas)
 
-    leadtime = leadtime[leadtime["Fim"] >= leadtime["Inicio"]].copy()
+    leadtime = leadtime[leadtime["Movimento"] >= leadtime["Inicio"]].copy()
     leadtime["Quantidade_movimentada"] = pd.to_numeric(leadtime["Quantidade_movimentada"], errors="coerce").fillna(0)
     datas_feriados = montar_datas_feriados(feriados)
-    horas_por_chave = {}
+    horas_final_por_chave = {}
+    horas_item_por_chave = {}
     for chave, grupo in dados.groupby(chaves, dropna=False):
         if not isinstance(chave, tuple):
             chave = (chave,)
         fim_grupo = grupo[(grupo["ACAO_NORM"] == "FIM") & (grupo["QUANTIDADE_NUM"] > 0)]["DATA_HORA_DT"].max()
-        intervalos = intervalos_ativos_por_lancamentos(grupo, fim_grupo)
-        horas_por_chave[chave] = calcular_horas_comerciais_intervalos(intervalos, datas_feriados)
+        movimento_grupo = grupo[
+            grupo["ACAO_NORM"].isin(["PARCIAL", "FIM"])
+            & (grupo["QUANTIDADE_NUM"] > 0)
+        ]["DATA_HORA_DT"].max()
+        if pd.notna(fim_grupo):
+            intervalos_final = intervalos_ativos_por_lancamentos(grupo, fim_grupo)
+            horas_final_por_chave[chave] = calcular_horas_comerciais_intervalos(intervalos_final, datas_feriados)
+        if pd.notna(movimento_grupo):
+            intervalos_item = intervalos_ativos_por_lancamentos(grupo, movimento_grupo)
+            horas_item_por_chave[chave] = calcular_horas_comerciais_intervalos(intervalos_item, datas_feriados)
 
     leadtime["CHAVE_LEADTIME"] = leadtime[chaves].apply(lambda linha: tuple(linha.tolist()), axis=1)
-    leadtime["Leadtime_horas"] = leadtime["CHAVE_LEADTIME"].map(horas_por_chave).fillna(0)
+    leadtime["Leadtime_horas"] = leadtime["CHAVE_LEADTIME"].map(horas_final_por_chave)
+    leadtime["Leadtime_item_total_horas"] = leadtime["CHAVE_LEADTIME"].map(horas_item_por_chave).fillna(0)
     leadtime["Leadtime_item_horas"] = leadtime.apply(
-        lambda linha: linha["Leadtime_horas"] / linha["Quantidade_movimentada"]
+        lambda linha: linha["Leadtime_item_total_horas"] / linha["Quantidade_movimentada"]
         if linha["Quantidade_movimentada"] > 0
-        else linha["Leadtime_horas"],
+        else linha["Leadtime_item_total_horas"],
         axis=1,
     )
     return leadtime[colunas]
@@ -1288,10 +1313,11 @@ def montar_leadtime_tabela_html(titulo, leadtime, coluna_nome, vazio, coluna_tem
         coluna_tempo = "Leadtime_horas"
 
     if total_por_quantidade:
+        coluna_total = "Leadtime_item_total_horas" if "Leadtime_item_total_horas" in leadtime.columns else "Leadtime_horas"
         resumo = (
             leadtime.groupby(coluna_nome, as_index=False)
             .agg(
-                Tempo_total_horas=("Leadtime_horas", "sum"),
+                Tempo_total_horas=(coluna_total, "sum"),
                 Quantidade_total=("Quantidade_movimentada", "sum"),
                 Ordens=("OP", "nunique"),
             )
@@ -1304,6 +1330,9 @@ def montar_leadtime_tabela_html(titulo, leadtime, coluna_nome, vazio, coluna_tem
         )
         resumo = resumo.sort_values(["Media_horas", "Ordens"], ascending=[True, False]).head(10)
     else:
+        leadtime = leadtime[leadtime[coluna_tempo].notna()].copy()
+        if leadtime.empty:
+            return montar_chart_html(titulo, vazio=vazio)
         resumo = (
             leadtime.groupby(coluna_nome, as_index=False)
             .agg(Media_horas=(coluna_tempo, "mean"), Ordens=("OP", "count"))
