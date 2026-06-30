@@ -202,6 +202,15 @@ def aplicar_estilo():
             min-height: var(--dashboard-gap);
         }
 
+        div[data-testid="stIFrame"],
+        div[data-testid="stIFrame"] iframe,
+        div[data-testid="stElementContainer"]:has(iframe) {
+            border: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            outline: 0 !important;
+        }
+
         div[data-testid="stVerticalBlockBorderWrapper"] {
             border: 2px solid #000000 !important;
             border-radius: 8px !important;
@@ -318,23 +327,12 @@ def aplicar_estilo():
             white-space: nowrap;
         }
 
-        .st-key-dashboard_lateral [data-testid="stVerticalBlockBorderWrapper"] {
-            border: 2px solid #000000 !important;
-            border-color: #000000 !important;
-            border-radius: 8px !important;
-            background: #ffffff !important;
-            box-shadow: none !important;
-            overflow: hidden !important;
-        }
-
-        .st-key-dashboard_lateral [data-testid="stVerticalBlockBorderWrapper"] {
-            padding: 8px 10px !important;
-        }
-
+        .st-key-dashboard_lateral [data-testid="stVerticalBlockBorderWrapper"],
         .st-key-dashboard_lateral [data-testid="stVerticalBlockBorder"] {
             border: 0 !important;
             border-radius: 0 !important;
             box-shadow: none !important;
+            padding: 0 !important;
         }
 
         div[data-testid="stDateInput"] input,
