@@ -20,9 +20,6 @@ def ativar_modo_exibicao(pagina_atual):
 
     st.session_state.modo_exibicao_pagina_atual = pagina_atual
 
-    if pagina_atual != "dashboard":
-        st.session_state.dashboard_liberado = False
-
     st.session_state.modo_exibicao_ativo = False
     st.session_state.modo_exibicao_navegando = False
     st.session_state.modo_exibicao_proxima_troca = None

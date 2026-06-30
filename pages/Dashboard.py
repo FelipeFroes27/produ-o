@@ -9,7 +9,6 @@ from utils.sheets import carregar_bd_produtos, carregar_feriados, carregar_histo
 from utils.tempo_trabalho import calcular_horas_comerciais_intervalos, formatar_duracao_horas, intervalos_ativos_por_lancamentos, montar_datas_feriados
 
 
-SENHA_DASHBOARD = "Trendx2026"
 COLUNAS_META_PRODUTO = ["CATEGORIA", "MARCA", "GRUPO"]
 
 
@@ -79,18 +78,12 @@ def aplicar_estilo():
             width: auto;
         }
 
-        .dashboard-shell,
-        .password-shell {
+.dashboard-shell {
             border: 2px solid #000000;
             border-radius: 8px;
             background: #ffffff;
             padding: 8px 10px;
             min-height: 0;
-        }
-
-        .password-shell {
-            margin-bottom: 14px;
-            padding: 12px 12px 11px 12px;
         }
 
         .dashboard-title {
@@ -494,40 +487,8 @@ def render_sidebar():
         st.page_link("pages/Dashboard.py", label="Dashboard")
 
 
-def autenticar_dashboard():
-    if st.session_state.get("dashboard_liberado"):
-        return True
-
-    modal_senha_dashboard()
-    return False
-
-
-@st.dialog("Acesso ao dashboard")
-def modal_senha_dashboard():
-    st.markdown(
-        """
-        <div class="password-shell">
-            <h1 class="page-title">Dashboard</h1>
-            <p class="page-copy">Informe a senha para acessar o acompanhamento de desempenho.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    senha = st.text_input("Senha", type="password")
-    if st.button("Entrar", use_container_width=True):
-        if senha == SENHA_DASHBOARD:
-            st.session_state.dashboard_liberado = True
-            st.rerun()
-        else:
-            st.error("Senha incorreta.")
-
-
 aplicar_estilo()
 render_sidebar()
-
-if not autenticar_dashboard():
-    st.stop()
 
 
 def filtrar_programacao(ordens):
