@@ -336,7 +336,7 @@ def aplicar_estilo():
         }
 
         div[data-testid="stDateInput"] input,
-        div[data-testid="stSelectbox"] div[data-baseweb="select"] {
+        div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
             border: 2px solid #000000 !important;
             border-radius: 8px !important;
         }
@@ -346,10 +346,17 @@ def aplicar_estilo():
             font-weight: 750 !important;
         }
 
-        div[data-testid="stSelectbox"] div[data-baseweb="select"],
-        div[data-testid="stMultiSelect"] div[data-baseweb="select"] {
+        div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+        div[data-testid="stMultiSelect"] div[data-baseweb="select"] > div {
             border: 2px solid #000000 !important;
             border-radius: 8px !important;
+            box-shadow: none !important;
+        }
+
+        div[data-testid="stSelectbox"] div[data-baseweb="select"],
+        div[data-testid="stMultiSelect"] div[data-baseweb="select"] {
+            border: 0 !important;
+            border-radius: 0 !important;
             box-shadow: none !important;
         }
 

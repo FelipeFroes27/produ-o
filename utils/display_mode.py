@@ -77,13 +77,20 @@ def _aplicar_css_base():
         div[data-testid="stNumberInput"] input,
         div[data-testid="stDateInput"] input,
         div[data-testid="stTextArea"] textarea,
-        div[data-testid="stSelectbox"] div[data-baseweb="select"],
-        div[data-testid="stMultiSelect"] div[data-baseweb="select"],
+        div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+        div[data-testid="stMultiSelect"] div[data-baseweb="select"] > div,
         div[data-testid="stForm"],
         div[data-testid="stAlert"],
         div[data-testid="stDataFrame"] {
             border: 2px solid #000000 !important;
             border-radius: 8px !important;
+            box-shadow: none !important;
+        }
+
+        div[data-testid="stSelectbox"] div[data-baseweb="select"],
+        div[data-testid="stMultiSelect"] div[data-baseweb="select"] {
+            border: 0 !important;
+            border-radius: 0 !important;
             box-shadow: none !important;
         }
 
@@ -243,13 +250,20 @@ def _aplicar_layout_menu(menu_aberto):
         div[data-testid="stNumberInput"] input,
         div[data-testid="stDateInput"] input,
         div[data-testid="stTextArea"] textarea,
-        div[data-testid="stSelectbox"] div[data-baseweb="select"],
-        div[data-testid="stMultiSelect"] div[data-baseweb="select"],
+        div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+        div[data-testid="stMultiSelect"] div[data-baseweb="select"] > div,
         div[data-testid="stForm"],
         div[data-testid="stAlert"],
         div[data-testid="stDataFrame"] {{
             border: 2px solid #000000 !important;
             border-radius: 8px !important;
+            box-shadow: none !important;
+        }}
+
+        div[data-testid="stSelectbox"] div[data-baseweb="select"],
+        div[data-testid="stMultiSelect"] div[data-baseweb="select"] {{
+            border: 0 !important;
+            border-radius: 0 !important;
             box-shadow: none !important;
         }}
 
