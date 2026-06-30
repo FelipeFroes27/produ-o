@@ -574,6 +574,7 @@ def aplicar_icone_botao(key, nome_arquivo):
     st.markdown(
         f"""
         <style>
+        .st-key-{key} div[data-testid="stButton"] button,
         .st-key-{key} button {{
             background-image: url("data:image/png;base64,{imagem}") !important;
             background-repeat: no-repeat !important;
@@ -583,16 +584,24 @@ def aplicar_icone_botao(key, nome_arquivo):
             border: 4px solid #000000 !important;
             border-radius: 999px !important;
             box-shadow: none !important;
+            overflow: hidden !important;
             min-height: 60px !important;
+            height: 60px !important;
+            max-height: 60px !important;
+            min-width: 60px !important;
             width: 60px !important;
+            max-width: 60px !important;
             padding: 0 !important;
             color: transparent !important;
             font-size: 0 !important;
+            line-height: 0 !important;
         }}
+        .st-key-{key} div[data-testid="stButton"] button *,
         .st-key-{key} button * {{
             color: transparent !important;
             font-size: 0 !important;
         }}
+        .st-key-{key} div[data-testid="stButton"] button:hover,
         .st-key-{key} button:hover {{
             background-color: #f8fafc !important;
             border-color: #000000 !important;
@@ -609,18 +618,22 @@ def aplicar_estilo_card(key, cor):
         <style>
         .st-key-{key},
         .st-key-{key} > div,
+        .st-key-{key}[data-testid="stVerticalBlockBorderWrapper"],
+        .st-key-{key}[data-testid="stVerticalBlockBorder"],
         .st-key-{key} [data-testid="stVerticalBlockBorderWrapper"],
         .st-key-{key} [data-testid="stVerticalBlockBorder"],
         .st-key-{key} [data-testid="stVerticalBlock"] {{
             background: {cor} !important;
         }}
 
+        .st-key-{key}[data-testid="stVerticalBlockBorderWrapper"],
         .st-key-{key} [data-testid="stVerticalBlockBorderWrapper"] {{
             border: 2px solid #000000 !important;
             border-radius: 8px !important;
             box-shadow: none !important;
         }}
 
+        .st-key-{key}[data-testid="stVerticalBlockBorder"],
         .st-key-{key} [data-testid="stVerticalBlockBorder"] {{
             border: 0 !important;
             border-radius: 0 !important;
