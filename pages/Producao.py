@@ -215,49 +215,53 @@ def aplicar_estilo():
         div[data-testid="stVerticalBlockBorderWrapper"]:has(.risk-late-marker) {
             background: #fff1f2 !important;
             border: 2px solid #000000 !important;
-            border-radius: 14px !important;
+            border-radius: 8px !important;
         }
 
         div[data-testid="stVerticalBlockBorderWrapper"]:has(.risk-late-marker) > div,
         div[data-testid="stVerticalBlockBorder"]:has(.risk-late-marker) {
             background: #fff1f2 !important;
-            border-color: #000000 !important;
+            border: 0 !important;
+            border-radius: 0 !important;
         }
 
         div[data-testid="stVerticalBlockBorderWrapper"]:has(.risk-warning-marker) {
             background: #fffbeb !important;
             border: 2px solid #000000 !important;
-            border-radius: 14px !important;
+            border-radius: 8px !important;
         }
 
         div[data-testid="stVerticalBlockBorderWrapper"]:has(.risk-warning-marker) > div,
         div[data-testid="stVerticalBlockBorder"]:has(.risk-warning-marker) {
             background: #fffbeb !important;
-            border-color: #000000 !important;
+            border: 0 !important;
+            border-radius: 0 !important;
         }
 
         div[data-testid="stVerticalBlockBorderWrapper"]:has(.risk-safe-marker) {
             background: #ecfdf5 !important;
             border: 2px solid #000000 !important;
-            border-radius: 14px !important;
+            border-radius: 8px !important;
         }
 
         div[data-testid="stVerticalBlockBorderWrapper"]:has(.risk-safe-marker) > div,
         div[data-testid="stVerticalBlockBorder"]:has(.risk-safe-marker) {
             background: #ecfdf5 !important;
-            border-color: #000000 !important;
+            border: 0 !important;
+            border-radius: 0 !important;
         }
 
         div[data-testid="stVerticalBlockBorderWrapper"]:has(.risk-neutral-marker) {
             background: #f8fafc !important;
             border: 2px solid #000000 !important;
-            border-radius: 14px !important;
+            border-radius: 8px !important;
         }
 
         div[data-testid="stVerticalBlockBorderWrapper"]:has(.risk-neutral-marker) > div,
         div[data-testid="stVerticalBlockBorder"]:has(.risk-neutral-marker) {
             background: #f8fafc !important;
-            border-color: #000000 !important;
+            border: 0 !important;
+            border-radius: 0 !important;
         }
 
         .risk-late-marker,
@@ -398,7 +402,7 @@ def aplicar_estilo():
             max-width: min(1180px, 94vw) !important;
             max-height: 90vh !important;
             overflow-y: auto !important;
-            border-radius: 12px !important;
+            border-radius: 8px !important;
         }
 
         div[data-testid="stDialog"] div[data-testid="stVerticalBlock"] {
@@ -609,13 +613,17 @@ def aplicar_estilo_card(key, cor):
         .st-key-{key} [data-testid="stVerticalBlockBorder"],
         .st-key-{key} [data-testid="stVerticalBlock"] {{
             background: {cor} !important;
-            border-color: #000000 !important;
         }}
 
-        .st-key-{key} [data-testid="stVerticalBlockBorderWrapper"],
-        .st-key-{key} [data-testid="stVerticalBlockBorder"] {{
+        .st-key-{key} [data-testid="stVerticalBlockBorderWrapper"] {{
             border: 2px solid #000000 !important;
-            border-radius: 14px !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
+        }}
+
+        .st-key-{key} [data-testid="stVerticalBlockBorder"] {{
+            border: 0 !important;
+            border-radius: 0 !important;
             box-shadow: none !important;
         }}
         </style>

@@ -73,6 +73,42 @@ def _aplicar_css_base():
             fill: #000000 !important;
         }
 
+        button,
+        div[data-testid="stButton"] button,
+        div[data-testid="stFormSubmitButton"] button,
+        div[data-testid="stTextInput"] input,
+        div[data-testid="stNumberInput"] input,
+        div[data-testid="stDateInput"] input,
+        div[data-testid="stTextArea"] textarea,
+        div[data-testid="stSelectbox"] div[data-baseweb="select"],
+        div[data-testid="stMultiSelect"] div[data-baseweb="select"],
+        div[data-testid="stForm"],
+        div[data-testid="stAlert"],
+        div[data-testid="stDataFrame"] {
+            border: 2px solid #000000 !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
+        }
+
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            border: 2px solid #000000 !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
+            overflow: hidden !important;
+        }
+
+        div[data-testid="stVerticalBlockBorder"] {
+            border: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+        }
+
+        div[data-testid="stDialog"] div[role="dialog"] {
+            border: 2px solid #000000 !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
+        }
+
         iframe[title*="streamlit_autorefresh"],
         div[data-testid="stIFrame"]:has(iframe[title*="streamlit_autorefresh"]),
         div[data-testid="stElementContainer"]:has(iframe[title*="streamlit_autorefresh"]) {
@@ -201,6 +237,42 @@ def _aplicar_layout_menu(menu_aberto):
 
         div[data-baseweb="select"] svg {{
             fill: #000000 !important;
+        }}
+
+        button,
+        div[data-testid="stButton"] button,
+        div[data-testid="stFormSubmitButton"] button,
+        div[data-testid="stTextInput"] input,
+        div[data-testid="stNumberInput"] input,
+        div[data-testid="stDateInput"] input,
+        div[data-testid="stTextArea"] textarea,
+        div[data-testid="stSelectbox"] div[data-baseweb="select"],
+        div[data-testid="stMultiSelect"] div[data-baseweb="select"],
+        div[data-testid="stForm"],
+        div[data-testid="stAlert"],
+        div[data-testid="stDataFrame"] {{
+            border: 2px solid #000000 !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
+        }}
+
+        div[data-testid="stVerticalBlockBorderWrapper"] {{
+            border: 2px solid #000000 !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
+            overflow: hidden !important;
+        }}
+
+        div[data-testid="stVerticalBlockBorder"] {{
+            border: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+        }}
+
+        div[data-testid="stDialog"] div[role="dialog"] {{
+            border: 2px solid #000000 !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
         }}
 
         {sidebar_css}

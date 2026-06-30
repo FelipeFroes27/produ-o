@@ -209,12 +209,12 @@ def aplicar_estilo():
             min-height: var(--dashboard-gap);
         }
 
-        div[data-testid="stVerticalBlockBorderWrapper"],
-        div[data-testid="stVerticalBlockBorder"] {
+        div[data-testid="stVerticalBlockBorderWrapper"] {
             border: 2px solid #000000 !important;
             border-radius: 8px !important;
             background: #ffffff !important;
             box-shadow: none !important;
+            overflow: hidden !important;
         }
 
         div[data-testid="stVerticalBlockBorderWrapper"] {
@@ -222,6 +222,9 @@ def aplicar_estilo():
         }
 
         div[data-testid="stVerticalBlockBorder"] {
+            border: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
             padding: 0 !important;
         }
 
@@ -322,17 +325,23 @@ def aplicar_estilo():
             white-space: nowrap;
         }
 
-        .st-key-dashboard_lateral [data-testid="stVerticalBlockBorderWrapper"],
-        .st-key-dashboard_lateral [data-testid="stVerticalBlockBorder"] {
+        .st-key-dashboard_lateral [data-testid="stVerticalBlockBorderWrapper"] {
             border: 2px solid #000000 !important;
             border-color: #000000 !important;
             border-radius: 8px !important;
             background: #ffffff !important;
             box-shadow: none !important;
+            overflow: hidden !important;
         }
 
         .st-key-dashboard_lateral [data-testid="stVerticalBlockBorderWrapper"] {
             padding: 8px 10px !important;
+        }
+
+        .st-key-dashboard_lateral [data-testid="stVerticalBlockBorder"] {
+            border: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
         }
 
         div[data-testid="stDateInput"] input,
