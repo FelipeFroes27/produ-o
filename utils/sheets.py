@@ -14,7 +14,7 @@ ABA_HISTORICO = "Hist\u00f3rico"
 ABA_BD_PRODUTOS = "Bd_produtos"
 ABA_FERIADOS = "Feriados"
 FUSO_BRASILIA = timezone(timedelta(hours=-3))
-COLUNAS_USUARIOS = ["Codigo", "Nome"]
+COLUNAS_USUARIOS = ["Codigo", "Nome", "Cargo"]
 COLUNAS_ORDENS = [
     "USUARIO_RESPONSAVEL",
     "STATUS",
@@ -87,7 +87,7 @@ def carregar_usuarios():
     worksheet = abrir_planilha().worksheet(ABA_USUARIOS)
     df = pd.DataFrame(worksheet.get_all_records(numericise_ignore=["all"]))
     df = _limpar_dataframe(df)
-    df = _garantir_colunas(df, COLUNAS_USUARIOS)
+    df = _padronizar_usuarios(df)
 
     if "Codigo" in df.columns:
         df = df[df["Codigo"].astype(str).str.strip() != ""]
@@ -255,7 +255,7 @@ def carregar_feriados():
     return _garantir_colunas(feriados, COLUNAS_FERIADOS)
 
 
-def lancar_realizacao(ordem, quantidade_lancada):
+def lancar_realizacao(ordem, quantidade_lancada, qualidade=False):
     aba_origem = str(ordem["ABA_ORIGEM"])
     linha_planilha = int(ordem["LINHA_PLANILHA"])
     quantidade_lancada = float(quantidade_lancada)
@@ -279,6 +279,8 @@ def lancar_realizacao(ordem, quantidade_lancada):
     worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(novo_realizado))
     try:
         registrar_historico(ordem, quantidade_lancada, acao)
+        if qualidade:
+            registrar_historico(ordem, quantidade_lancada, "Qualidade")
     except Exception as exc:
         try:
             worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(realizado_atual))
@@ -300,7 +302,48 @@ def lancar_pausa_ordem(ordem):
     carregar_historico.clear()
 
 
-def registrar_historico(ordem, quantidade_lancada, acao):
+def lancar_aprovacao_qualidade(ordem, quantidade_aprovada, avaliador):
+    quantidade_aprovada = float(quantidade_aprovada)
+    if quantidade_aprovada <= 0:
+        raise ValueError("Informe uma quantidade maior que zero.")
+
+    registrar_historico(ordem, quantidade_aprovada, "Aprovado", avaliador=avaliador)
+    carregar_historico.clear()
+
+
+def lancar_reprovacao_qualidade(ordem, quantidade_reprovada, avaliador):
+    aba_origem = str(ordem["ABA_ORIGEM"])
+    linha_planilha = int(ordem["LINHA_PLANILHA"])
+    quantidade_reprovada = float(quantidade_reprovada)
+
+    if quantidade_reprovada <= 0:
+        raise ValueError("Informe uma quantidade maior que zero.")
+
+    worksheet = abrir_planilha().worksheet(aba_origem)
+    headers = worksheet.row_values(1)
+    coluna_realizado = _indice_coluna(headers, "REALIZADO")
+    realizado_atual = _numero_celula(worksheet.cell(linha_planilha, coluna_realizado).value)
+
+    if quantidade_reprovada > realizado_atual:
+        raise ValueError(f"A quantidade reprovada passa do realizado atual ({_formatar_numero(realizado_atual)}).")
+
+    novo_realizado = max(realizado_atual - quantidade_reprovada, 0)
+    worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(novo_realizado))
+    try:
+        registrar_historico(ordem, quantidade_reprovada, "Reprovado", avaliador=avaliador)
+    except Exception as exc:
+        try:
+            worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(realizado_atual))
+            carregar_ordens.clear()
+        except Exception:
+            pass
+        raise RuntimeError("A reprovacao foi desfeita porque nao foi possivel registrar o historico. Tente novamente.") from exc
+
+    carregar_ordens.clear()
+    carregar_historico.clear()
+
+
+def registrar_historico(ordem, quantidade_lancada, acao, avaliador=""):
     worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
     headers = worksheet.row_values(1)
     data_hora = datetime.now(FUSO_BRASILIA).strftime("%d/%m/%Y %H:%M:%S")
@@ -324,6 +367,10 @@ def registrar_historico(ordem, quantidade_lancada, acao):
             linha.append(str(ordem.get("ABA_ORIGEM", "")))
         elif header_normalizado == "ACAO":
             linha.append(str(acao))
+        elif header_normalizado in ["AVALIADOR", "QUALIDADE", "RESPONSAVELQUALIDADE", "USUARIOQUALIDADE"]:
+            linha.append(str(avaliador))
+        elif header_normalizado in ["OBS", "OBSERVACAO", "OBSERVACOES"] and avaliador:
+            linha.append(f"Avaliador: {avaliador}")
         else:
             linha.append("")
 
@@ -380,6 +427,24 @@ def _produtos_vazios():
         coluna: pd.Series(dtype="object")
         for coluna in COLUNAS_PRODUTOS
     })
+
+
+def _padronizar_usuarios(df):
+    df = df.copy()
+    colunas = {
+        "Codigo": _encontrar_coluna(df, ["CODIGO", "CODIGO USUARIO", "COD"]),
+        "Nome": _encontrar_coluna(df, ["NOME", "USUARIO", "USU\u00c1RIO"]),
+        "Cargo": _encontrar_coluna(df, ["CARGO", "FUNCAO", "FUN\u00c7\u00c3O"]),
+    }
+
+    usuarios = pd.DataFrame()
+    for nome_padrao, coluna_origem in colunas.items():
+        if coluna_origem is None:
+            usuarios[nome_padrao] = pd.Series(dtype="object")
+        else:
+            usuarios[nome_padrao] = df[coluna_origem].astype(str).str.strip()
+
+    return _garantir_colunas(usuarios, COLUNAS_USUARIOS)
 
 
 def _feriados_vazios():

@@ -533,6 +533,7 @@ def render_sidebar():
         st.markdown("</div>", unsafe_allow_html=True)
         st.page_link("app.py", label="Inicio")
         st.page_link("pages/Producao.py", label="Producao")
+        st.page_link("pages/Qualidade.py", label="Qualidade")
         st.page_link("pages/Historico_OP.py", label="Histórico OP")
         st.page_link("pages/Dashboard.py", label="Dashboard")
 
@@ -1046,7 +1047,7 @@ def render_detalhe(ordem, ordens_usuario, modo="consulta"):
             lancamento_em_andamento = bool(st.session_state.get(trava_lancamento, False))
             st.markdown('<div class="completion-box">', unsafe_allow_html=True)
             with st.form(f"form_lancamento_{chave_lancamento}"):
-                qtd_col, botao_col = st.columns([1, 1])
+                qtd_col, flag_col, botao_col = st.columns([1, .65, 1])
                 with qtd_col:
                     quantidade = st.number_input(
                         "Quantidade realizada agora",
@@ -1055,6 +1056,13 @@ def render_detalhe(ordem, ordens_usuario, modo="consulta"):
                         step=1,
                         value=min(1, inteiro(saldo)),
                         help="O valor sera somado ao realizado atual da ordem.",
+                    )
+                with flag_col:
+                    st.markdown('<div class="completion-spacer"></div>', unsafe_allow_html=True)
+                    enviar_qualidade = st.checkbox(
+                        "Qualidade",
+                        key=f"qualidade_{chave_lancamento}",
+                        help="Enviar este lancamento para aprovacao da qualidade.",
                     )
                 with botao_col:
                     st.markdown('<div class="completion-spacer"></div>', unsafe_allow_html=True)
@@ -1071,7 +1079,7 @@ def render_detalhe(ordem, ordens_usuario, modo="consulta"):
                     return
                 st.session_state[trava_lancamento] = True
                 try:
-                    lancar_realizacao(ordem, quantidade)
+                    lancar_realizacao(ordem, quantidade, qualidade=enviar_qualidade)
                 except Exception as exc:
                     st.session_state.pop(trava_lancamento, None)
                     st.error(str(exc))

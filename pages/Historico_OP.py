@@ -203,6 +203,7 @@ def render_sidebar():
         st.markdown("</div>", unsafe_allow_html=True)
         st.page_link("app.py", label="Inicio")
         st.page_link("pages/Producao.py", label="Producao")
+        st.page_link("pages/Qualidade.py", label="Qualidade")
         st.page_link("pages/Historico_OP.py", label="Histórico OP")
         st.page_link("pages/Dashboard.py", label="Dashboard")
 
@@ -410,14 +411,15 @@ tempos = resumo_tempos(lancamentos, feriados)
 
 qtd_programada = programacao_op["QUANTIDADE_NUM"].sum() if not programacao_op.empty else 0
 qtd_planilha_realizada = programacao_op["REALIZADO_NUM"].sum() if not programacao_op.empty else 0
-qtd_historico = (
-    lancamentos[
-        lancamentos["ACAO_NORM"].isin(["PARCIAL", "FIM"])
+if not lancamentos.empty:
+    movimentos_historico = lancamentos[
+        lancamentos["ACAO_NORM"].isin(["PARCIAL", "FIM", "REPROVADO"])
         & (lancamentos["QUANTIDADE_NUM"] > 0)
-    ]["QUANTIDADE_NUM"].sum()
-    if not lancamentos.empty
-    else 0
-)
+    ].copy()
+    movimentos_historico.loc[movimentos_historico["ACAO_NORM"] == "REPROVADO", "QUANTIDADE_NUM"] *= -1
+    qtd_historico = max(movimentos_historico["QUANTIDADE_NUM"].sum(), 0)
+else:
+    qtd_historico = 0
 saldo = max(qtd_programada - qtd_planilha_realizada, 0)
 
 tempo_util = formatar_duracao_horas(tempos["horas_uteis"]) if tempos else "-"
