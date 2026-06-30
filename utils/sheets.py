@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import gspread
 import pandas as pd
 import streamlit as st
+from gspread.utils import rowcol_to_a1
 from google.oauth2.service_account import Credentials
 
 
@@ -263,6 +264,12 @@ def lancar_realizacao(ordem, quantidade_lancada, qualidade=False):
     if quantidade_lancada <= 0:
         raise ValueError("Informe uma quantidade maior que zero.")
 
+    ultima_acao = ultima_acao_controle_ordem(ordem)
+    if ultima_acao != "INICIO":
+        if ultima_acao == "PAUSA":
+            raise ValueError("Retome a ordem antes de concluir.")
+        raise ValueError("Inicie a ordem antes de concluir.")
+
     worksheet = abrir_planilha().worksheet(aba_origem)
     headers = worksheet.row_values(1)
     coluna_realizado = _indice_coluna(headers, "REALIZADO")
@@ -293,11 +300,19 @@ def lancar_realizacao(ordem, quantidade_lancada, qualidade=False):
 
 
 def lancar_inicio_ordem(ordem):
+    ultima_acao = ultima_acao_controle_ordem(ordem)
+    if ultima_acao == "INICIO":
+        raise ValueError("Esta ordem ja esta em andamento.")
     registrar_historico(ordem, 0, "Inicio")
     carregar_historico.clear()
 
 
 def lancar_pausa_ordem(ordem):
+    ultima_acao = ultima_acao_controle_ordem(ordem)
+    if ultima_acao != "INICIO":
+        if ultima_acao == "PAUSA":
+            raise ValueError("Esta ordem ja esta pausada.")
+        raise ValueError("Inicie a ordem antes de pausar.")
     registrar_historico(ordem, 0, "Pausa")
     carregar_historico.clear()
 
@@ -330,6 +345,7 @@ def lancar_reprovacao_qualidade(ordem, quantidade_reprovada, avaliador):
     novo_realizado = max(realizado_atual - quantidade_reprovada, 0)
     worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(novo_realizado))
     try:
+        ajustar_historico_reprovacao(ordem, quantidade_reprovada)
         registrar_historico(ordem, quantidade_reprovada, "Reprovado", avaliador=avaliador)
     except Exception as exc:
         try:
@@ -341,6 +357,143 @@ def lancar_reprovacao_qualidade(ordem, quantidade_reprovada, avaliador):
 
     carregar_ordens.clear()
     carregar_historico.clear()
+
+
+def ajustar_historico_reprovacao(ordem, quantidade_reprovada):
+    worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
+    values = worksheet.get_all_values()
+    if len(values) < 2:
+        raise ValueError("Nao ha historico produtivo para ajustar.")
+
+    headers = [str(coluna).strip() for coluna in values[0]]
+    col_usuario = _indice_coluna_opcional(headers, ["USU\u00c1RIO RESPONSAVEL", "USUARIO RESPONSAVEL"])
+    col_op = _indice_coluna_opcional(headers, ["N\u00b0 DA OP", "N DA OP", "OP"])
+    col_codigo = _indice_coluna_opcional(headers, ["CODIGO"])
+    col_produto = _indice_coluna_opcional(headers, ["PRODUTO"])
+    col_quantidade = _indice_coluna_opcional(headers, ["QUANTIDADE"])
+    col_tipo = _indice_coluna_opcional(headers, ["TIPO"])
+    col_acao = _indice_coluna_opcional(headers, ["A\u00c7\u00c3O", "ACAO"])
+
+    if not all([col_usuario, col_op, col_codigo, col_produto, col_quantidade, col_tipo, col_acao]):
+        raise ValueError("A aba Historico precisa ter usuario, OP, codigo, produto, quantidade, tipo e acao.")
+
+    def valor_linha(row, coluna):
+        indice = coluna - 1
+        return str(row[indice]).strip() if indice < len(row) else ""
+
+    chave_ordem = {
+        "usuario": _normalizar(ordem.get("USUARIO_RESPONSAVEL", "")),
+        "op": _normalizar(ordem.get("OP", "")),
+        "codigo": _normalizar(ordem.get("COD_PRODUTO", "")),
+        "produto": _normalizar(ordem.get("PRODUTO", "")),
+        "tipo": _normalizar(ordem.get("ABA_ORIGEM", "")),
+    }
+
+    linhas_produtivas = []
+    for row_index, row in enumerate(values[1:], start=2):
+        acao = _normalizar(valor_linha(row, col_acao))
+        if acao not in ["PARCIAL", "FIM"]:
+            continue
+
+        if (
+            _normalizar(valor_linha(row, col_usuario)) != chave_ordem["usuario"]
+            or _normalizar(valor_linha(row, col_op)) != chave_ordem["op"]
+            or _normalizar(valor_linha(row, col_codigo)) != chave_ordem["codigo"]
+            or _normalizar(valor_linha(row, col_produto)) != chave_ordem["produto"]
+            or _normalizar(valor_linha(row, col_tipo)) != chave_ordem["tipo"]
+        ):
+            continue
+
+        quantidade = _numero_celula(valor_linha(row, col_quantidade))
+        if quantidade > 0:
+            linhas_produtivas.append({
+                "row": row_index,
+                "acao": acao,
+                "quantidade": quantidade,
+            })
+
+    total_produtivo = sum(linha["quantidade"] for linha in linhas_produtivas)
+    if quantidade_reprovada > total_produtivo:
+        raise ValueError(f"A quantidade reprovada passa do historico produtivo atual ({_formatar_numero(total_produtivo)}).")
+
+    restante = float(quantidade_reprovada)
+    atualizacoes = []
+    linhas_ajustadas = []
+    for linha in reversed(linhas_produtivas):
+        if restante <= 0:
+            break
+
+        abatimento = min(linha["quantidade"], restante)
+        nova_quantidade = linha["quantidade"] - abatimento
+        restante -= abatimento
+        linhas_ajustadas.append({**linha, "nova_quantidade": nova_quantidade})
+        atualizacoes.append({
+            "range": rowcol_to_a1(linha["row"], col_quantidade),
+            "values": [[_formatar_numero(nova_quantidade)]],
+        })
+
+    total_apos_ajuste = total_produtivo - float(quantidade_reprovada)
+    quantidade_ordem = float(ordem.get("QUANTIDADE_NUM", 0) or 0)
+    if total_apos_ajuste < quantidade_ordem:
+        for linha in linhas_ajustadas:
+            if linha["acao"] == "FIM" and linha["nova_quantidade"] > 0:
+                atualizacoes.append({
+                    "range": rowcol_to_a1(linha["row"], col_acao),
+                    "values": [["Parcial"]],
+                })
+
+    if atualizacoes:
+        worksheet.batch_update(atualizacoes, value_input_option="RAW")
+    carregar_historico.clear()
+
+
+def ultima_acao_controle_ordem(ordem):
+    worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
+    values = worksheet.get_all_values()
+    if len(values) < 2:
+        return ""
+
+    headers = [str(coluna).strip() for coluna in values[0]]
+    col_usuario = _indice_coluna_opcional(headers, ["USU\u00c1RIO RESPONSAVEL", "USUARIO RESPONSAVEL"])
+    col_op = _indice_coluna_opcional(headers, ["N\u00b0 DA OP", "N DA OP", "OP"])
+    col_codigo = _indice_coluna_opcional(headers, ["CODIGO"])
+    col_produto = _indice_coluna_opcional(headers, ["PRODUTO"])
+    col_tipo = _indice_coluna_opcional(headers, ["TIPO"])
+    col_acao = _indice_coluna_opcional(headers, ["A\u00c7\u00c3O", "ACAO"])
+
+    if not all([col_usuario, col_op, col_codigo, col_produto, col_tipo, col_acao]):
+        return ""
+
+    def valor_linha(row, coluna):
+        indice = coluna - 1
+        return str(row[indice]).strip() if indice < len(row) else ""
+
+    chave_ordem = {
+        "usuario": _normalizar(ordem.get("USUARIO_RESPONSAVEL", "")),
+        "op": _normalizar(ordem.get("OP", "")),
+        "codigo": _normalizar(ordem.get("COD_PRODUTO", "")),
+        "produto": _normalizar(ordem.get("PRODUTO", "")),
+        "tipo": _normalizar(ordem.get("ABA_ORIGEM", "")),
+    }
+
+    ultima_acao = ""
+    for row in values[1:]:
+        acao = _normalizar(valor_linha(row, col_acao))
+        if acao not in ["INICIO", "PAUSA", "FIM", "REPROVADO"]:
+            continue
+
+        if (
+            _normalizar(valor_linha(row, col_usuario)) != chave_ordem["usuario"]
+            or _normalizar(valor_linha(row, col_op)) != chave_ordem["op"]
+            or _normalizar(valor_linha(row, col_codigo)) != chave_ordem["codigo"]
+            or _normalizar(valor_linha(row, col_produto)) != chave_ordem["produto"]
+            or _normalizar(valor_linha(row, col_tipo)) != chave_ordem["tipo"]
+        ):
+            continue
+
+        ultima_acao = acao
+
+    return ultima_acao
 
 
 def registrar_historico(ordem, quantidade_lancada, acao, avaliador=""):
@@ -616,6 +769,15 @@ def _indice_coluna(headers, nome):
         if _normalizar(header) == nome_normalizado:
             return index
     raise ValueError(f"Coluna {nome} nao encontrada.")
+
+
+def _indice_coluna_opcional(headers, nomes):
+    mapa = {_normalizar(header): index for index, header in enumerate(headers, start=1)}
+    for nome in nomes:
+        indice = mapa.get(_normalizar(nome))
+        if indice:
+            return indice
+    return None
 
 
 def _encontrar_coluna(df, nomes):

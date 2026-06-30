@@ -710,7 +710,7 @@ def marcar_ordens_em_andamento(ordens, historico):
     historico = historico[
         historico["OP"].astype(str).str.strip().ne("")
         & historico["DATA_HORA_DT"].notna()
-        & historico["ACAO_NORM"].isin(["INICIO", "PAUSA"])
+        & historico["ACAO_NORM"].isin(["INICIO", "PAUSA", "FIM", "REPROVADO"])
     ].copy()
     if historico.empty:
         return ordens
@@ -909,12 +909,14 @@ def render_ordem_card(linha, ordens_usuario):
                 key_conclusao = f"conclusao_{chave_css}"
                 aplicar_icone_botao(key_conclusao, ICONES_BOTOES["conclusao"])
                 st.markdown('<div class="finish-button">', unsafe_allow_html=True)
-                conclusao_desabilitada = duplicada or pausada
+                conclusao_desabilitada = duplicada or pausada or not em_andamento
                 ajuda_conclusao = (
                     "Corrija a duplicidade na programacao para concluir."
                     if duplicada
                     else "Retome a ordem antes de concluir."
                     if pausada
+                    else "Inicie a ordem antes de concluir."
+                    if not em_andamento
                     else "Concluir ordem"
                 )
                 if st.button("Concluir", key=key_conclusao, help=ajuda_conclusao, disabled=conclusao_desabilitada):
@@ -1041,6 +1043,11 @@ def render_detalhe(ordem, ordens_usuario, modo="consulta"):
         saldo = float(ordem["SALDO_NUM"])
         if saldo <= 0:
             st.success("Esta ordem nao possui saldo pendente.")
+        elif not bool(ordem.get("EM_ANDAMENTO", False)):
+            if bool(ordem.get("PAUSADA", False)):
+                st.warning("Retome a ordem antes de concluir.")
+            else:
+                st.warning("Inicie a ordem antes de concluir.")
         else:
             chave_lancamento = f"{ordem['ABA_ORIGEM']}_{ordem['LINHA_PLANILHA']}"
             trava_lancamento = f"lancamento_em_andamento_{chave_lancamento}"

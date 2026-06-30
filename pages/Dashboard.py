@@ -757,13 +757,10 @@ def historico_realizado(historico):
         return historico
 
     acao = historico["ACAO"].fillna("").astype(str).str.strip().str.upper()
-    realizado = historico[
+    return historico[
         acao.isin(["PARCIAL", "FIM"])
         | ((acao == "") & (historico["QUANTIDADE_NUM"] > 0))
-        | (acao == "REPROVADO")
     ].copy()
-    realizado.loc[acao.loc[realizado.index] == "REPROVADO", "QUANTIDADE_NUM"] *= -1
-    return realizado
 
 
 def formatar_numero(valor):
@@ -1237,7 +1234,7 @@ def calcular_leadtime(historico, feriados=None):
     dados = dados[
         dados["OP"].astype(str).str.strip().ne("")
         & dados["DATA_HORA_DT"].notna()
-        & dados["ACAO_NORM"].isin(["INICIO", "PAUSA", "PARCIAL", "FIM", "REPROVADO"])
+        & dados["ACAO_NORM"].isin(["INICIO", "PAUSA", "PARCIAL", "FIM"])
     ].copy()
     if dados.empty:
         return pd.DataFrame(columns=colunas)
@@ -1263,11 +1260,9 @@ def calcular_leadtime(historico, feriados=None):
         .max()
         .rename("Movimento")
     )
-    dados["QUANTIDADE_LEADTIME"] = dados["QUANTIDADE_NUM"]
-    dados.loc[dados["ACAO_NORM"] == "REPROVADO", "QUANTIDADE_LEADTIME"] *= -1
     quantidade = (
-        dados[dados["ACAO_NORM"].isin(["PARCIAL", "FIM", "REPROVADO"]) & (dados["QUANTIDADE_NUM"] > 0)]
-        .groupby(chaves, dropna=False)["QUANTIDADE_LEADTIME"]
+        dados[dados["ACAO_NORM"].isin(["PARCIAL", "FIM"]) & (dados["QUANTIDADE_NUM"] > 0)]
+        .groupby(chaves, dropna=False)["QUANTIDADE_NUM"]
         .sum()
         .rename("Quantidade_movimentada")
     )
@@ -1276,7 +1271,7 @@ def calcular_leadtime(historico, feriados=None):
         return pd.DataFrame(columns=colunas)
 
     leadtime = leadtime[leadtime["Movimento"] >= leadtime["Inicio"]].copy()
-    leadtime["Quantidade_movimentada"] = pd.to_numeric(leadtime["Quantidade_movimentada"], errors="coerce").fillna(0).clip(lower=0)
+    leadtime["Quantidade_movimentada"] = pd.to_numeric(leadtime["Quantidade_movimentada"], errors="coerce").fillna(0)
     datas_feriados = montar_datas_feriados(feriados)
     horas_final_por_chave = {}
     horas_item_por_chave = {}

@@ -413,11 +413,10 @@ qtd_programada = programacao_op["QUANTIDADE_NUM"].sum() if not programacao_op.em
 qtd_planilha_realizada = programacao_op["REALIZADO_NUM"].sum() if not programacao_op.empty else 0
 if not lancamentos.empty:
     movimentos_historico = lancamentos[
-        lancamentos["ACAO_NORM"].isin(["PARCIAL", "FIM", "REPROVADO"])
+        lancamentos["ACAO_NORM"].isin(["PARCIAL", "FIM"])
         & (lancamentos["QUANTIDADE_NUM"] > 0)
     ].copy()
-    movimentos_historico.loc[movimentos_historico["ACAO_NORM"] == "REPROVADO", "QUANTIDADE_NUM"] *= -1
-    qtd_historico = max(movimentos_historico["QUANTIDADE_NUM"].sum(), 0)
+    qtd_historico = movimentos_historico["QUANTIDADE_NUM"].sum()
 else:
     qtd_historico = 0
 saldo = max(qtd_programada - qtd_planilha_realizada, 0)
