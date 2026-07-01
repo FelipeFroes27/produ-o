@@ -116,6 +116,31 @@ def aplicar_estilo():
             font-size: 14px;
         }
 
+        .page-logos {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 0 0 auto;
+        }
+
+        .page-logos img {
+            max-height: 36px;
+            max-width: 158px;
+            object-fit: contain;
+        }
+
+        .page-logos .goper-mark {
+            max-height: 36px;
+            max-width: 36px;
+        }
+
+        .logo-divider {
+            width: 3px;
+            height: 34px;
+            background: #000000;
+            display: inline-block;
+        }
+
         .user-title {
             display: inline-flex;
             align-items: center;
@@ -1167,12 +1192,20 @@ def grafico_por_aba(ordens_usuario):
 aplicar_estilo()
 render_sidebar()
 
+logo_branco = base64.b64encode(Path("Logo Branco.bmp").read_bytes()).decode("utf-8")
+logo_goper = base64.b64encode(Path("logo preto goper.png").read_bytes()).decode("utf-8")
+
 st.markdown(
-    """
+    f"""
     <div class="page-head">
         <div class="page-title">
             <h1>Ordens do usuario</h1>
             <p>Demanda de trabalho por responsavel, priorizada por prazo e saldo pendente.</p>
+        </div>
+        <div class="page-logos">
+            <img src="data:image/bmp;base64,{logo_branco}" alt="Trendx">
+            <span class="logo-divider"></span>
+            <img class="goper-mark" src="data:image/png;base64,{logo_goper}" alt="Goper">
         </div>
     </div>
     """,

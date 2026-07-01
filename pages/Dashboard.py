@@ -2,7 +2,9 @@ import pandas as pd
 import plotly.express as px
 import streamlit.components.v1 as components
 import streamlit as st
+import base64
 from html import escape
+from pathlib import Path
 
 from utils.display_mode import ativar_modo_exibicao, render_menu_lateral
 from utils.sheets import carregar_bd_produtos, carregar_feriados, carregar_historico, carregar_ordens
@@ -144,6 +146,39 @@ def aplicar_estilo():
             color: #333333;
             font-size: 12px;
             line-height: 1.25;
+        }
+
+        .page-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 20px;
+            margin: 0 0 12px 0;
+        }
+
+        .page-logos {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 0 0 auto;
+        }
+
+        .page-logos img {
+            max-height: 36px;
+            max-width: 158px;
+            object-fit: contain;
+        }
+
+        .page-logos .goper-mark {
+            max-height: 36px;
+            max-width: 36px;
+        }
+
+        .logo-divider {
+            width: 3px;
+            height: 34px;
+            background: #000000;
+            display: inline-block;
         }
 
 
@@ -1716,7 +1751,25 @@ programacao = filtrar_programacao(ordens)
 programacao = enriquecer_produtos(programacao, bd_produtos, "COD_PRODUTO", "PRODUTO")
 historico = enriquecer_produtos(historico, bd_produtos, "CODIGO", "PRODUTO")
 
-st.markdown('<div class="dashboard-top-spacer"></div>', unsafe_allow_html=True)
+logo_branco = base64.b64encode(Path("Logo Branco.bmp").read_bytes()).decode("utf-8")
+logo_goper = base64.b64encode(Path("logo preto goper.png").read_bytes()).decode("utf-8")
+
+st.markdown(
+    f"""
+    <div class="page-head">
+        <div>
+            <h1 class="page-title">Dashboard</h1>
+            <p class="page-copy">Indicadores de programação, realização e desempenho da produção.</p>
+        </div>
+        <div class="page-logos">
+            <img src="data:image/bmp;base64,{logo_branco}" alt="Trendx">
+            <span class="logo-divider"></span>
+            <img class="goper-mark" src="data:image/png;base64,{logo_goper}" alt="Goper">
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 lateral, graficos = st.columns([1.28, 6.72], gap="small", vertical_alignment="top")
 

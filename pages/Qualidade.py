@@ -93,8 +93,16 @@ def aplicar_estilo():
             width: auto;
         }
 
+        .page-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 20px;
+            margin: 2.7rem 0 1rem 0;
+        }
+
         .page-head h1 {
-            margin: 2.7rem 0 .25rem 0;
+            margin: 0 0 .25rem 0;
             color: #000000;
             font-size: 30px;
             line-height: 1.05;
@@ -103,9 +111,34 @@ def aplicar_estilo():
         }
 
         .page-head p {
-            margin: 0 0 1rem 0;
+            margin: 0;
             color: #333333;
             font-size: 14px;
+        }
+
+        .page-logos {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 0 0 auto;
+        }
+
+        .page-logos img {
+            max-height: 36px;
+            max-width: 158px;
+            object-fit: contain;
+        }
+
+        .page-logos .goper-mark {
+            max-height: 36px;
+            max-width: 36px;
+        }
+
+        .logo-divider {
+            width: 3px;
+            height: 34px;
+            background: #000000;
+            display: inline-block;
         }
 
         .kpi-card {
@@ -659,11 +692,21 @@ def render_card_qualidade(linha, avaliadores):
 aplicar_estilo()
 render_sidebar()
 
+logo_branco = base64.b64encode(Path("Logo Branco.bmp").read_bytes()).decode("utf-8")
+logo_goper = base64.b64encode(Path("logo preto goper.png").read_bytes()).decode("utf-8")
+
 st.markdown(
-    """
+    f"""
     <div class="page-head">
-        <h1>Qualidade</h1>
-        <p>Ordens enviadas para aprovacao ou reprovacao da qualidade.</p>
+        <div>
+            <h1>Qualidade</h1>
+            <p>Ordens enviadas para aprovacao ou reprovacao da qualidade.</p>
+        </div>
+        <div class="page-logos">
+            <img src="data:image/bmp;base64,{logo_branco}" alt="Trendx">
+            <span class="logo-divider"></span>
+            <img class="goper-mark" src="data:image/png;base64,{logo_goper}" alt="Goper">
+        </div>
     </div>
     """,
     unsafe_allow_html=True,

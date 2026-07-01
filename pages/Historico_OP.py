@@ -1,4 +1,6 @@
+import base64
 from html import escape
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -75,8 +77,16 @@ def aplicar_estilo():
             padding: 8px 0 16px 0;
         }
 
+        .page-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 20px;
+            margin: 2.7rem 0 1rem 0;
+        }
+
         .page-title {
-            margin: 2.7rem 0 .25rem 0;
+            margin: 0 0 .25rem 0;
             font-size: 30px;
             font-weight: 900;
             color: #000000;
@@ -84,9 +94,34 @@ def aplicar_estilo():
         }
 
         .page-copy {
-            margin: 0 0 1rem 0;
+            margin: 0;
             font-size: 14px;
             color: #1f2937;
+        }
+
+        .page-logos {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 0 0 auto;
+        }
+
+        .page-logos img {
+            max-height: 36px;
+            max-width: 158px;
+            object-fit: contain;
+        }
+
+        .page-logos .goper-mark {
+            max-height: 36px;
+            max-width: 36px;
+        }
+
+        .logo-divider {
+            width: 3px;
+            height: 34px;
+            background: #000000;
+            display: inline-block;
         }
 
         .info-card {
@@ -369,10 +404,22 @@ def linhas_calculo_tempo(tempos):
 aplicar_estilo()
 render_sidebar()
 
+logo_branco = base64.b64encode(Path("Logo Branco.bmp").read_bytes()).decode("utf-8")
+logo_goper = base64.b64encode(Path("logo preto goper.png").read_bytes()).decode("utf-8")
+
 st.markdown(
-    """
-    <h1 class="page-title">Histórico OP</h1>
-    <p class="page-copy">Consulta detalhada para entender o que aconteceu com uma ordem de producao.</p>
+    f"""
+    <div class="page-head">
+        <div>
+            <h1 class="page-title">Histórico OP</h1>
+            <p class="page-copy">Consulta detalhada para entender o que aconteceu com uma ordem de producao.</p>
+        </div>
+        <div class="page-logos">
+            <img src="data:image/bmp;base64,{logo_branco}" alt="Trendx">
+            <span class="logo-divider"></span>
+            <img class="goper-mark" src="data:image/png;base64,{logo_goper}" alt="Goper">
+        </div>
+    </div>
     """,
     unsafe_allow_html=True,
 )
