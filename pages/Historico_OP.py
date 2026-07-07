@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from utils.display_mode import ativar_modo_exibicao, render_menu_lateral
-from utils.sheets import carregar_feriados, carregar_historico, carregar_ordens
+from utils.sheets import acao_base_historico, acao_produtiva_historico, carregar_feriados, carregar_historico, carregar_ordens
 from utils.tempo_trabalho import detalhar_horas_comerciais_intervalos, formatar_duracao_horas, intervalos_ativos_por_lancamentos, montar_datas_feriados
 
 
@@ -239,6 +239,7 @@ def render_sidebar():
         st.page_link("app.py", label="Inicio")
         st.page_link("pages/Producao.py", label="Producao")
         st.page_link("pages/Qualidade.py", label="Qualidade")
+        st.page_link("pages/Embalagens.py", label="Embalagens")
         st.page_link("pages/Historico_OP.py", label="Histórico OP")
         st.page_link("pages/Dashboard.py", label="Dashboard")
 
@@ -306,7 +307,8 @@ def preparar_lancamentos(historico_op):
         return historico_op
 
     dados = historico_op.copy()
-    dados["ACAO_NORM"] = dados["ACAO"].fillna("").astype(str).str.strip().str.upper()
+    dados["ACAO_NORM"] = dados["ACAO"].map(acao_base_historico)
+    dados["ACAO_PRODUTIVA"] = dados["ACAO"].map(acao_produtiva_historico)
     dados["QUANTIDADE_NUM"] = pd.to_numeric(dados["QUANTIDADE_NUM"], errors="coerce").fillna(0)
     return dados.sort_values("DATA_HORA_DT", na_position="last")
 
@@ -318,6 +320,7 @@ def resumo_tempos(lancamentos, feriados):
     inicio = lancamentos[lancamentos["ACAO_NORM"] == "INICIO"]["DATA_HORA_DT"].dropna()
     fim = lancamentos[
         (lancamentos["ACAO_NORM"] == "FIM")
+        & (lancamentos["ACAO_PRODUTIVA"])
         & (lancamentos["QUANTIDADE_NUM"] > 0)
     ]["DATA_HORA_DT"].dropna()
 
@@ -460,7 +463,7 @@ qtd_programada = programacao_op["QUANTIDADE_NUM"].sum() if not programacao_op.em
 qtd_planilha_realizada = programacao_op["REALIZADO_NUM"].sum() if not programacao_op.empty else 0
 if not lancamentos.empty:
     movimentos_historico = lancamentos[
-        lancamentos["ACAO_NORM"].isin(["PARCIAL", "FIM"])
+        lancamentos["ACAO_PRODUTIVA"]
         & (lancamentos["QUANTIDADE_NUM"] > 0)
     ].copy()
     qtd_historico = movimentos_historico["QUANTIDADE_NUM"].sum()

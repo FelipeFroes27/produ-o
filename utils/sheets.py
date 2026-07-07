@@ -62,6 +62,7 @@ COLUNAS_PRODUTOS = [
     "GRUPO",
 ]
 COLUNAS_FERIADOS = ["DATA"]
+ETAPAS_PLANEJAMENTO = ["PRODUCAO", "MANUTENCAO", "PECAS"]
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -81,6 +82,42 @@ def conectar():
 @st.cache_resource
 def abrir_planilha():
     return conectar().open_by_key(SPREADSHEET_ID)
+
+
+def acao_descritiva(acao, etapa=""):
+    acao_texto = str(acao or "").strip().title()
+    etapa_texto = str(etapa or "").strip()
+    if not acao_texto:
+        return ""
+    if not etapa_texto:
+        return acao_texto
+    return f"{acao_texto} {etapa_texto}"
+
+
+def acao_base_historico(acao):
+    acao_norm = _normalizar(acao)
+    for base in ["ENTRADA", "INICIO", "PAUSA", "PARCIAL", "FIM", "QUALIDADE", "APROVADO", "REPROVADO", "EMBALAGEM"]:
+        if acao_norm == base or acao_norm.startswith(f"{base} "):
+            return base
+    return acao_norm
+
+
+def acao_etapa_historico(acao):
+    acao_norm = _normalizar(acao)
+    base = acao_base_historico(acao)
+    if not base:
+        return ""
+    if acao_norm == base:
+        if base in ["QUALIDADE", "APROVADO", "REPROVADO"]:
+            return "QUALIDADE"
+        if base == "EMBALAGEM":
+            return "EMBALAGEM"
+        return ""
+    return acao_norm[len(base):].strip()
+
+
+def acao_produtiva_historico(acao):
+    return acao_base_historico(acao) in ["PARCIAL", "FIM"] and acao_etapa_historico(acao) in ETAPAS_PLANEJAMENTO
 
 
 @st.cache_data(ttl=180)
@@ -183,6 +220,8 @@ def carregar_historico():
     df["QUANTIDADE_NUM"] = _serie_numero(df["QUANTIDADE"])
     df["DATA_HORA_DT"] = pd.to_datetime(df["DATA_HORA"], dayfirst=True, errors="coerce")
     df["DATA"] = df["DATA_HORA_DT"].dt.normalize()
+    df["ACAO_BASE"] = df["ACAO"].map(acao_base_historico)
+    df["ACAO_ETAPA"] = df["ACAO"].map(acao_etapa_historico)
 
     return _garantir_colunas(df, COLUNAS_HISTORICO)
 
@@ -281,13 +320,13 @@ def lancar_realizacao(ordem, quantidade_lancada, qualidade=False):
 
     novo_realizado = realizado_atual + quantidade_lancada
     quantidade_total = float(ordem["QUANTIDADE_NUM"])
-    acao = "Fim" if novo_realizado >= quantidade_total else "Parcial"
+    acao = acao_descritiva("Fim" if novo_realizado >= quantidade_total else "Parcial", ordem.get("ABA_ORIGEM", ""))
 
     worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(novo_realizado))
     try:
         registrar_historico(ordem, quantidade_lancada, acao)
         if qualidade:
-            registrar_historico(ordem, quantidade_lancada, "Qualidade")
+            registrar_historico(ordem, quantidade_lancada, acao_descritiva("Entrada", "Qualidade"))
     except Exception as exc:
         try:
             worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(realizado_atual))
@@ -299,11 +338,27 @@ def lancar_realizacao(ordem, quantidade_lancada, qualidade=False):
     carregar_ordens.clear()
 
 
+def lancar_encaminhamento_qualidade(ordem, quantidade):
+    quantidade = float(quantidade)
+    if quantidade <= 0:
+        raise ValueError("Informe uma quantidade maior que zero.")
+    registrar_historico(ordem, quantidade, acao_descritiva("Entrada", "Qualidade"))
+    carregar_historico.clear()
+
+
+def lancar_encaminhamento_embalagem(ordem, quantidade):
+    quantidade = float(quantidade)
+    if quantidade <= 0:
+        raise ValueError("Informe uma quantidade maior que zero.")
+    registrar_historico(ordem, quantidade, acao_descritiva("Entrada", "Embalagem"))
+    carregar_historico.clear()
+
+
 def lancar_inicio_ordem(ordem):
     ultima_acao = ultima_acao_controle_ordem(ordem)
     if ultima_acao == "INICIO":
         raise ValueError("Esta ordem ja esta em andamento.")
-    registrar_historico(ordem, 0, "Inicio")
+    registrar_historico(ordem, 0, acao_descritiva("Inicio", ordem.get("ABA_ORIGEM", "")))
     carregar_historico.clear()
 
 
@@ -313,16 +368,81 @@ def lancar_pausa_ordem(ordem):
         if ultima_acao == "PAUSA":
             raise ValueError("Esta ordem ja esta pausada.")
         raise ValueError("Inicie a ordem antes de pausar.")
-    registrar_historico(ordem, 0, "Pausa")
+    registrar_historico(ordem, 0, acao_descritiva("Pausa", ordem.get("ABA_ORIGEM", "")))
     carregar_historico.clear()
 
 
-def lancar_aprovacao_qualidade(ordem, quantidade_aprovada, avaliador):
+def lancar_inicio_setor(ordem, setor, usuario=""):
+    ultima_acao = ultima_acao_setor_ordem(ordem, setor)
+    if ultima_acao == "INICIO":
+        raise ValueError(f"Esta etapa de {str(setor).lower()} ja esta em andamento.")
+    registrar_historico(ordem, 0, acao_descritiva("Inicio", setor), avaliador=usuario)
+    carregar_historico.clear()
+
+
+def lancar_pausa_setor(ordem, setor, usuario=""):
+    ultima_acao = ultima_acao_setor_ordem(ordem, setor)
+    if ultima_acao != "INICIO":
+        if ultima_acao == "PAUSA":
+            raise ValueError(f"Esta etapa de {str(setor).lower()} ja esta pausada.")
+        raise ValueError(f"Inicie a etapa de {str(setor).lower()} antes de pausar.")
+    registrar_historico(ordem, 0, acao_descritiva("Pausa", setor), avaliador=usuario)
+    carregar_historico.clear()
+
+
+def lancar_movimento_setor(ordem, quantidade, setor, usuario="", campo_pendente="QUANTIDADE_PENDENTE"):
+    quantidade = float(quantidade)
+    if quantidade <= 0:
+        raise ValueError("Informe uma quantidade maior que zero.")
+
+    ultima_acao = ultima_acao_setor_ordem(ordem, setor)
+    if ultima_acao != "INICIO":
+        if ultima_acao == "PAUSA":
+            raise ValueError(f"Retome a etapa de {str(setor).lower()} antes de concluir.")
+        raise ValueError(f"Inicie a etapa de {str(setor).lower()} antes de concluir.")
+
+    pendente = float(ordem.get(campo_pendente, 0) or 0)
+    if quantidade > pendente:
+        raise ValueError(f"A quantidade passa do pendente de {str(setor).lower()} ({_formatar_numero(pendente)}).")
+
+    acao = acao_descritiva("Fim" if quantidade >= pendente else "Parcial", setor)
+    registrar_historico(ordem, quantidade, acao, avaliador=usuario)
+    carregar_historico.clear()
+
+
+def lancar_inicio_qualidade(ordem, usuario):
+    lancar_inicio_setor(ordem, "Qualidade", usuario=usuario)
+
+
+def lancar_pausa_qualidade(ordem, usuario):
+    lancar_pausa_setor(ordem, "Qualidade", usuario=usuario)
+
+
+def lancar_inicio_embalagem(ordem, usuario=""):
+    lancar_inicio_setor(ordem, "Embalagem", usuario=usuario)
+
+
+def lancar_pausa_embalagem(ordem, usuario=""):
+    lancar_pausa_setor(ordem, "Embalagem", usuario=usuario)
+
+
+def lancar_conclusao_embalagem(ordem, quantidade, usuario=""):
+    lancar_movimento_setor(ordem, quantidade, "Embalagem", usuario=usuario)
+
+
+def lancar_aprovacao_qualidade(ordem, quantidade_aprovada, avaliador, embalagem=False):
     quantidade_aprovada = float(quantidade_aprovada)
     if quantidade_aprovada <= 0:
         raise ValueError("Informe uma quantidade maior que zero.")
 
-    registrar_historico(ordem, quantidade_aprovada, "Aprovado", avaliador=avaliador)
+    lancar_movimento_setor(ordem, quantidade_aprovada, "Qualidade", usuario=avaliador)
+    if embalagem:
+        registrar_historico(
+            ordem,
+            quantidade_aprovada,
+            acao_descritiva("Entrada", "Embalagem"),
+            avaliador=avaliador,
+        )
     carregar_historico.clear()
 
 
@@ -346,7 +466,12 @@ def lancar_reprovacao_qualidade(ordem, quantidade_reprovada, avaliador):
     worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(novo_realizado))
     try:
         ajustar_historico_reprovacao(ordem, quantidade_reprovada)
-        registrar_historico(ordem, quantidade_reprovada, "Reprovado", avaliador=avaliador)
+        registrar_historico(
+            ordem,
+            quantidade_reprovada,
+            acao_descritiva("Reprovado", "Qualidade"),
+            avaliador=avaliador,
+        )
     except Exception as exc:
         try:
             worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(realizado_atual))
@@ -391,8 +516,8 @@ def ajustar_historico_reprovacao(ordem, quantidade_reprovada):
 
     linhas_produtivas = []
     for row_index, row in enumerate(values[1:], start=2):
-        acao = _normalizar(valor_linha(row, col_acao))
-        if acao not in ["PARCIAL", "FIM"]:
+        acao = valor_linha(row, col_acao)
+        if not acao_produtiva_historico(acao):
             continue
 
         if (
@@ -436,10 +561,10 @@ def ajustar_historico_reprovacao(ordem, quantidade_reprovada):
     quantidade_ordem = float(ordem.get("QUANTIDADE_NUM", 0) or 0)
     if total_apos_ajuste < quantidade_ordem:
         for linha in linhas_ajustadas:
-            if linha["acao"] == "FIM" and linha["nova_quantidade"] > 0:
+            if acao_base_historico(linha["acao"]) == "FIM" and linha["nova_quantidade"] > 0:
                 atualizacoes.append({
                     "range": rowcol_to_a1(linha["row"], col_acao),
-                    "values": [["Parcial"]],
+                    "values": [[acao_descritiva("Parcial", ordem.get("ABA_ORIGEM", ""))]],
                 })
 
     if atualizacoes:
@@ -478,8 +603,14 @@ def ultima_acao_controle_ordem(ordem):
 
     ultima_acao = ""
     for row in values[1:]:
-        acao = _normalizar(valor_linha(row, col_acao))
-        if acao not in ["INICIO", "PAUSA", "FIM", "REPROVADO"]:
+        acao = valor_linha(row, col_acao)
+        acao_base = acao_base_historico(acao)
+        if acao_base not in ["INICIO", "PAUSA", "FIM", "REPROVADO"]:
+            continue
+        etapa_controle = acao_etapa_historico(acao)
+        if acao_base == "REPROVADO":
+            etapa_controle = chave_ordem["tipo"]
+        if etapa_controle != chave_ordem["tipo"]:
             continue
 
         if (
@@ -491,12 +622,68 @@ def ultima_acao_controle_ordem(ordem):
         ):
             continue
 
-        ultima_acao = acao
+        ultima_acao = acao_base
 
     return ultima_acao
 
 
-def registrar_historico(ordem, quantidade_lancada, acao, avaliador=""):
+def ultima_acao_setor_ordem(ordem, setor):
+    worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
+    values = worksheet.get_all_values()
+    if len(values) < 2:
+        return ""
+
+    headers = [str(coluna).strip() for coluna in values[0]]
+    col_usuario = _indice_coluna_opcional(headers, ["USU\u00c1RIO RESPONSAVEL", "USUARIO RESPONSAVEL"])
+    col_op = _indice_coluna_opcional(headers, ["N\u00b0 DA OP", "N DA OP", "OP"])
+    col_codigo = _indice_coluna_opcional(headers, ["CODIGO"])
+    col_produto = _indice_coluna_opcional(headers, ["PRODUTO"])
+    col_tipo = _indice_coluna_opcional(headers, ["TIPO"])
+    col_acao = _indice_coluna_opcional(headers, ["A\u00c7\u00c3O", "ACAO"])
+
+    if not all([col_usuario, col_op, col_codigo, col_produto, col_tipo, col_acao]):
+        return ""
+
+    def valor_linha(row, coluna):
+        indice = coluna - 1
+        return str(row[indice]).strip() if indice < len(row) else ""
+
+    chave_ordem = {
+        "usuario": _normalizar(ordem.get("USUARIO_RESPONSAVEL", "")),
+        "op": _normalizar(ordem.get("OP", "")),
+        "codigo": _normalizar(ordem.get("COD_PRODUTO", "")),
+        "produto": _normalizar(ordem.get("PRODUTO", "")),
+        "tipo": _normalizar(ordem.get("ABA_ORIGEM", "")),
+    }
+
+    setor_norm = _normalizar(setor)
+    ultima_acao = ""
+    for row in values[1:]:
+        acao = valor_linha(row, col_acao)
+        acao_base = acao_base_historico(acao)
+        acao_etapa = acao_etapa_historico(acao)
+        if acao_base not in ["INICIO", "PAUSA", "FIM", "REPROVADO"] or acao_etapa != setor_norm:
+            continue
+
+        if (
+            _normalizar(valor_linha(row, col_op)) != chave_ordem["op"]
+            or _normalizar(valor_linha(row, col_codigo)) != chave_ordem["codigo"]
+            or _normalizar(valor_linha(row, col_produto)) != chave_ordem["produto"]
+            or _normalizar(valor_linha(row, col_tipo)) != chave_ordem["tipo"]
+        ):
+            continue
+
+        ultima_acao = acao_base
+
+    return ultima_acao
+
+
+def ultima_acao_embalagem_ordem(ordem):
+    ultima_acao = ultima_acao_setor_ordem(ordem, "Embalagem")
+    return f"{ultima_acao} EMBALAGEM" if ultima_acao else ""
+
+
+def registrar_historico(ordem, quantidade_lancada, acao, avaliador="", usuario_responsavel=""):
     worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
     headers = worksheet.row_values(1)
     data_hora = datetime.now(FUSO_BRASILIA).strftime("%d/%m/%Y %H:%M:%S")
@@ -505,7 +692,7 @@ def registrar_historico(ordem, quantidade_lancada, acao, avaliador=""):
     for header in headers:
         header_normalizado = _normalizar(header)
         if header_normalizado == _normalizar("USU\u00c1RIO RESPONSAVEL"):
-            linha.append(str(ordem.get("USUARIO_RESPONSAVEL", "")))
+            linha.append(str(usuario_responsavel or ordem.get("USUARIO_RESPONSAVEL", "")))
         elif header_normalizado == _normalizar("N\u00b0 DA OP"):
             linha.append(str(ordem.get("OP", "")))
         elif header_normalizado == _normalizar("DATA / HORA"):

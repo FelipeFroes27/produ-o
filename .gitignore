@@ -5,3 +5,4 @@ utils/__pycache__/
 pages/__pycache__/
 streamlit.log
 streamlit.err.log
+historico_backup_*.csv

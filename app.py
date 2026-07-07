@@ -195,6 +195,7 @@ with st.sidebar:
     st.page_link("app.py", label="Inicio")
     st.page_link("pages/Producao.py", label="Producao")
     st.page_link("pages/Qualidade.py", label="Qualidade")
+    st.page_link("pages/Embalagens.py", label="Embalagens")
     st.page_link("pages/Historico_OP.py", label="Histórico OP")
     st.page_link("pages/Dashboard.py", label="Dashboard")
 
@@ -224,6 +225,10 @@ st.markdown(
             <div class="home-section">
                 Qualidade
                 <span>Aprovacao e reprovacao de ordens enviadas para inspecao.</span>
+            </div>
+            <div class="home-section">
+                Embalagens
+                <span>Registro de inicio, pausa e conclusao dos itens liberados para embalagem.</span>
             </div>
             <div class="home-section">
                 Historico OP

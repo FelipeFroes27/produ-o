@@ -7,7 +7,7 @@ import plotly.express as px
 import streamlit as st
 
 from utils.display_mode import ativar_modo_exibicao, render_menu_lateral
-from utils.sheets import carregar_historico, carregar_ordens, carregar_resumo, carregar_usuarios, lancar_inicio_ordem, lancar_pausa_ordem, lancar_realizacao
+from utils.sheets import _normalizar, acao_base_historico, acao_etapa_historico, carregar_historico, carregar_ordens, carregar_resumo, carregar_usuarios, lancar_inicio_ordem, lancar_pausa_ordem, lancar_realizacao
 
 
 st.set_page_config(
@@ -563,6 +563,7 @@ def render_sidebar():
         st.page_link("app.py", label="Inicio")
         st.page_link("pages/Producao.py", label="Producao")
         st.page_link("pages/Qualidade.py", label="Qualidade")
+        st.page_link("pages/Embalagens.py", label="Embalagens")
         st.page_link("pages/Historico_OP.py", label="Histórico OP")
         st.page_link("pages/Dashboard.py", label="Dashboard")
 
@@ -752,7 +753,8 @@ def marcar_ordens_em_andamento(ordens, historico):
         return ordens
 
     historico = historico.copy()
-    historico["ACAO_NORM"] = historico["ACAO"].fillna("").astype(str).str.strip().str.upper()
+    historico["ACAO_NORM"] = historico["ACAO"].map(acao_base_historico)
+    historico["ACAO_ETAPA"] = historico["ACAO"].map(acao_etapa_historico)
     historico = historico[
         historico["OP"].astype(str).str.strip().ne("")
         & historico["DATA_HORA_DT"].notna()
@@ -772,6 +774,14 @@ def marcar_ordens_em_andamento(ordens, historico):
         lambda linha: "|".join(valor.strip().upper() for valor in linha),
         axis=1,
     )
+    historico["ETAPA_CONTROLE"] = historico["ACAO_ETAPA"]
+    historico.loc[historico["ACAO_NORM"] == "REPROVADO", "ETAPA_CONTROLE"] = historico.loc[
+        historico["ACAO_NORM"] == "REPROVADO", "TIPO"
+    ].fillna("").astype(str).map(_normalizar)
+    historico["TIPO_CONTROLE"] = historico["TIPO"].fillna("").astype(str).map(_normalizar)
+    historico = historico[
+        historico["ETAPA_CONTROLE"] == historico["TIPO_CONTROLE"]
+    ].copy()
     ultima_acao = (
         historico.sort_values("DATA_HORA_DT")
         .groupby("CHAVE_CONTROLE", dropna=False)["ACAO_NORM"]

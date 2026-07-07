@@ -84,7 +84,7 @@ def intervalos_ativos_por_lancamentos(lancamentos, fim=None):
     inicio_ativo = None
 
     for linha in dados.itertuples(index=False):
-        acao = str(getattr(linha, "ACAO_NORM", "")).strip().upper()
+        acao = _acao_base(str(getattr(linha, "ACAO_NORM", "")).strip().upper())
         data_hora = getattr(linha, "DATA_HORA_DT")
 
         if acao == "INICIO":
@@ -99,6 +99,13 @@ def intervalos_ativos_por_lancamentos(lancamentos, fim=None):
         intervalos.append((inicio_ativo, fim))
 
     return intervalos
+
+
+def _acao_base(acao):
+    for base in ["ENTRADA", "INICIO", "PAUSA", "PARCIAL", "FIM", "QUALIDADE", "APROVADO", "REPROVADO", "EMBALAGEM"]:
+        if acao == base or acao.startswith(f"{base} "):
+            return base
+    return acao
 
 
 def detalhar_horas_comerciais(inicio, fim, feriados=None):

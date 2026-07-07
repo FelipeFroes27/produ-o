@@ -13,30 +13,28 @@ from utils.sheets import (
     carregar_historico,
     carregar_ordens,
     carregar_usuarios,
-    lancar_aprovacao_qualidade,
-    lancar_encaminhamento_qualidade,
-    lancar_inicio_qualidade,
-    lancar_pausa_qualidade,
-    lancar_reprovacao_qualidade,
+    lancar_conclusao_embalagem,
+    lancar_encaminhamento_embalagem,
+    lancar_inicio_embalagem,
+    lancar_pausa_embalagem,
 )
 
 
 st.set_page_config(
-    page_title="Qualidade",
+    page_title="Embalagens",
     page_icon="icones/consulta-logo-refinado.png",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-ativar_modo_exibicao("qualidade")
+ativar_modo_exibicao("embalagens")
 render_menu_lateral()
 
 ICONES_BOTOES = {
     "inicio": "start-up.png",
     "pausa": "pausa.png",
-    "aprovacao": "verificado.png",
+    "conclusao": "verificado.png",
     "consulta": "informacoes.png",
-    "reprovacao": "reprovar.png",
 }
 
 
@@ -184,10 +182,6 @@ def aplicar_estilo():
             line-height: 1.15;
         }
 
-        .quality-card {
-            padding: 2px 0;
-        }
-
         .order-name {
             margin: 0;
             color: #000000;
@@ -255,8 +249,7 @@ def aplicar_estilo():
         }
 
         .detail-box,
-        .obs-box,
-        .completion-box {
+        .obs-box {
             border: 2px solid #000000;
             border-radius: 8px;
             background: #ffffff;
@@ -279,10 +272,6 @@ def aplicar_estilo():
             font-weight: 850;
             overflow-wrap: anywhere;
         }
-
-        .completion-spacer {
-            height: 28px;
-        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -299,7 +288,7 @@ def render_sidebar():
         st.page_link("pages/Producao.py", label="Producao")
         st.page_link("pages/Qualidade.py", label="Qualidade")
         st.page_link("pages/Embalagens.py", label="Embalagens")
-        st.page_link("pages/Historico_OP.py", label="Histórico OP")
+        st.page_link("pages/Historico_OP.py", label="Historico OP")
         st.page_link("pages/Dashboard.py", label="Dashboard")
 
 
@@ -321,14 +310,7 @@ def chave_texto(valor):
 def chave_css_texto(*valores):
     bruto = "_".join(chave_texto(valor) for valor in valores)
     chave = re.sub(r"[^A-Z0-9_]+", "_", bruto)
-    return chave.strip("_") or "qualidade"
-
-
-def chave_qualidade(df, colunas):
-    return df[colunas].fillna("").astype(str).apply(
-        lambda linha: "|".join(chave_texto(valor) for valor in linha),
-        axis=1,
-    )
+    return chave.strip("_") or "embalagem"
 
 
 def icone_base64(nome_arquivo):
@@ -378,12 +360,11 @@ def aplicar_icone_botao(key, nome_arquivo):
     )
 
 
-def usuarios_qualidade(usuarios):
-    if usuarios.empty or "Cargo" not in usuarios.columns:
+def usuarios_embalagem(usuarios):
+    if usuarios.empty or "Nome" not in usuarios.columns:
         return []
-    cargo = usuarios["Cargo"].fillna("").astype(str).str.upper()
     return sorted(
-        usuarios.loc[cargo.str.contains("QUALIDADE", na=False), "Nome"]
+        usuarios["Nome"]
         .dropna()
         .astype(str)
         .str.strip()
@@ -393,136 +374,110 @@ def usuarios_qualidade(usuarios):
     )
 
 
-def montar_fila_qualidade(historico, ordens):
-    colunas_saida = [
-        "USUARIO_RESPONSAVEL",
-        "OP",
+def chave_produto(df):
+    return df[["COD_PRODUTO", "PRODUTO"]].fillna("").astype(str).apply(
+        lambda linha: "|".join(chave_texto(valor) for valor in linha),
+        axis=1,
+    )
+
+
+def montar_ordem_embalagem(linha):
+    return {
+        "USUARIO_RESPONSAVEL": "",
+        "OP": "",
+        "COD_PRODUTO": str(linha.get("COD_PRODUTO", "")),
+        "PRODUTO": str(linha.get("PRODUTO", "")),
+        "ABA_ORIGEM": "Embalagem",
+        "QUANTIDADE_PENDENTE": float(linha.get("QUANTIDADE_PENDENTE", 0) or 0),
+        "QUANTIDADE_NUM": float(linha.get("QUANTIDADE_PENDENTE", 0) or 0),
+        "REALIZADO_NUM": 0,
+        "SALDO_NUM": 0,
+        "STATUS": "",
+        "OBS": "",
+    }
+
+
+def montar_fila_embalagem(historico):
+    colunas = [
         "COD_PRODUTO",
         "PRODUTO",
-        "ABA_ORIGEM",
         "QUANTIDADE_PENDENTE",
         "QUANTIDADE_SOLICITADA",
-        "QUANTIDADE_AVALIADA",
+        "QUANTIDADE_EMBALADA",
         "DATA_HORA_DT",
-        "STATUS",
-        "REALIZADO_NUM",
-        "SALDO_NUM",
-        "LINHA_PLANILHA",
-        "OBS",
-        "DATA_PRIORIDADE",
-        "ATRASADA",
-        "DIAS_ATRASO",
-        "TEM_ORDEM",
         "EM_ANDAMENTO",
         "PAUSADA",
     ]
     if historico.empty or "ACAO" not in historico.columns:
-        return pd.DataFrame(columns=colunas_saida)
+        return pd.DataFrame(columns=colunas)
 
     dados = historico.copy()
     dados["ACAO_NORM"] = dados["ACAO"].map(acao_base_historico)
     dados["ACAO_ETAPA"] = dados["ACAO"].map(acao_etapa_historico)
     dados["QUANTIDADE_NUM"] = pd.to_numeric(dados["QUANTIDADE_NUM"], errors="coerce").fillna(0)
-    chaves_historico = ["USUARIO_RESPONSAVEL", "OP", "CODIGO", "PRODUTO", "TIPO"]
+    dados = dados[dados["CODIGO"].astype(str).str.strip().ne("") | dados["PRODUTO"].astype(str).str.strip().ne("")].copy()
+    if dados.empty:
+        return pd.DataFrame(columns=colunas)
 
-    solicitacoes = (
+    entradas = (
         dados[
             (dados["ACAO_NORM"] == "ENTRADA")
-            & (dados["ACAO_ETAPA"] == "QUALIDADE")
+            & (dados["ACAO_ETAPA"] == "EMBALAGEM")
             & (dados["QUANTIDADE_NUM"] > 0)
         ]
-        .groupby(chaves_historico, dropna=False)
+        .rename(columns={"CODIGO": "COD_PRODUTO"})
+        .groupby(["COD_PRODUTO", "PRODUTO"], dropna=False)
         .agg(
             QUANTIDADE_SOLICITADA=("QUANTIDADE_NUM", "sum"),
             DATA_HORA_DT=("DATA_HORA_DT", "max"),
         )
         .reset_index()
     )
-    if solicitacoes.empty:
-        return pd.DataFrame(columns=colunas_saida)
+    if entradas.empty:
+        return pd.DataFrame(columns=colunas)
 
-    avaliacoes = (
+    embaladas = (
         dados[
-            (
-                (dados["ACAO_NORM"].isin(["PARCIAL", "FIM"]) & (dados["ACAO_ETAPA"] == "QUALIDADE"))
-                | ((dados["ACAO_NORM"] == "REPROVADO") & (dados["ACAO_ETAPA"] == "QUALIDADE"))
-            )
+            dados["ACAO_NORM"].isin(["PARCIAL", "FIM"])
+            & (dados["ACAO_ETAPA"] == "EMBALAGEM")
             & (dados["QUANTIDADE_NUM"] > 0)
         ]
-        .groupby(chaves_historico, dropna=False)
-        .agg(QUANTIDADE_AVALIADA=("QUANTIDADE_NUM", "sum"))
+        .rename(columns={"CODIGO": "COD_PRODUTO"})
+        .groupby(["COD_PRODUTO", "PRODUTO"], dropna=False)
+        .agg(QUANTIDADE_EMBALADA=("QUANTIDADE_NUM", "sum"))
         .reset_index()
     )
-    fila = solicitacoes.merge(avaliacoes, on=chaves_historico, how="left")
-    fila["QUANTIDADE_AVALIADA"] = fila["QUANTIDADE_AVALIADA"].fillna(0)
-    fila["QUANTIDADE_PENDENTE"] = (fila["QUANTIDADE_SOLICITADA"] - fila["QUANTIDADE_AVALIADA"]).clip(lower=0)
+    fila = entradas.merge(embaladas, on=["COD_PRODUTO", "PRODUTO"], how="left")
+    fila["QUANTIDADE_EMBALADA"] = fila["QUANTIDADE_EMBALADA"].fillna(0)
+    fila["QUANTIDADE_PENDENTE"] = (fila["QUANTIDADE_SOLICITADA"] - fila["QUANTIDADE_EMBALADA"]).clip(lower=0)
     fila = fila[fila["QUANTIDADE_PENDENTE"] > 0].copy()
     if fila.empty:
-        return pd.DataFrame(columns=colunas_saida)
+        return pd.DataFrame(columns=colunas)
 
-    fila = fila.rename(columns={"CODIGO": "COD_PRODUTO", "TIPO": "ABA_ORIGEM"})
-    fila["CHAVE_QUALIDADE"] = chave_qualidade(
-        fila,
-        ["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO", "USUARIO_RESPONSAVEL"],
-    )
-
-    ordens_base = ordens.copy()
-    if not ordens_base.empty:
-        ordens_base["CHAVE_QUALIDADE"] = chave_qualidade(
-            ordens_base,
-            ["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO", "USUARIO_RESPONSAVEL"],
-        )
-        ordens_base = ordens_base.drop_duplicates("CHAVE_QUALIDADE", keep="first")
-        extras = [
-            "CHAVE_QUALIDADE",
-            "STATUS",
-            "REALIZADO_NUM",
-            "SALDO_NUM",
-            "LINHA_PLANILHA",
-            "OBS",
-            "DATA_PRIORIDADE",
-            "ATRASADA",
-            "DIAS_ATRASO",
-        ]
-        fila = fila.merge(ordens_base[[col for col in extras if col in ordens_base.columns]], on="CHAVE_QUALIDADE", how="left")
-
-    if "LINHA_PLANILHA" in fila.columns:
-        fila["TEM_ORDEM"] = fila["LINHA_PLANILHA"].notna()
-    else:
-        fila["TEM_ORDEM"] = False
-
+    fila["CHAVE_PRODUTO"] = chave_produto(fila)
     controles = dados[
-        dados["ACAO_NORM"].isin(["INICIO", "PAUSA", "FIM", "REPROVADO"])
-        & (dados["ACAO_ETAPA"] == "QUALIDADE")
+        dados["ACAO_NORM"].isin(["INICIO", "PAUSA", "FIM"])
+        & (dados["ACAO_ETAPA"] == "EMBALAGEM")
         & dados["DATA_HORA_DT"].notna()
-    ].copy()
+    ].rename(columns={"CODIGO": "COD_PRODUTO"}).copy()
     if not controles.empty:
-        controles = controles.rename(columns={"CODIGO": "COD_PRODUTO", "TIPO": "ABA_ORIGEM"})
-        controles["CHAVE_QUALIDADE"] = chave_qualidade(
-            controles,
-            ["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO", "USUARIO_RESPONSAVEL"],
-        )
+        controles["CHAVE_PRODUTO"] = chave_produto(controles)
         ultima = (
             controles.sort_values("DATA_HORA_DT")
-            .groupby("CHAVE_QUALIDADE", dropna=False)["ACAO_NORM"]
+            .groupby("CHAVE_PRODUTO", dropna=False)["ACAO_NORM"]
             .last()
             .to_dict()
         )
-        fila["ULTIMA_ACAO_QUALIDADE"] = fila["CHAVE_QUALIDADE"].map(ultima).fillna("")
-        fila["EM_ANDAMENTO"] = fila["ULTIMA_ACAO_QUALIDADE"] == "INICIO"
-        fila["PAUSADA"] = fila["ULTIMA_ACAO_QUALIDADE"] == "PAUSA"
+        fila["ULTIMA_ACAO_EMBALAGEM"] = fila["CHAVE_PRODUTO"].map(ultima).fillna("")
+        fila["EM_ANDAMENTO"] = fila["ULTIMA_ACAO_EMBALAGEM"] == "INICIO"
+        fila["PAUSADA"] = fila["ULTIMA_ACAO_EMBALAGEM"] == "PAUSA"
     else:
         fila["EM_ANDAMENTO"] = False
         fila["PAUSADA"] = False
-    for coluna in colunas_saida:
-        if coluna not in fila.columns:
-            fila[coluna] = "" if coluna not in ["REALIZADO_NUM", "SALDO_NUM", "DIAS_ATRASO"] else 0
-    fila["REALIZADO_NUM"] = pd.to_numeric(fila["REALIZADO_NUM"], errors="coerce").fillna(0)
-    fila["SALDO_NUM"] = pd.to_numeric(fila["SALDO_NUM"], errors="coerce").fillna(0)
-    fila["ATRASADA"] = fila["ATRASADA"].fillna(False).astype(bool)
+
     fila["EM_ANDAMENTO"] = fila["EM_ANDAMENTO"].fillna(False).astype(bool)
     fila["PAUSADA"] = fila["PAUSADA"].fillna(False).astype(bool)
-    return fila[colunas_saida].sort_values(["DATA_HORA_DT", "OP"], ascending=[True, True])
+    return fila[colunas].sort_values(["DATA_HORA_DT", "PRODUTO"], ascending=[True, True])
 
 
 def render_kpi(label, valor, nota):
@@ -538,189 +493,94 @@ def render_kpi(label, valor, nota):
     )
 
 
-def resumo_prazo(linha):
-    data = linha.get("DATA_PRIORIDADE")
-    if pd.isna(data) or str(data).strip() == "":
-        return ""
-    data = pd.to_datetime(data, errors="coerce")
-    if pd.isna(data):
-        return ""
-    if bool(linha.get("ATRASADA", False)):
-        return f"Atrasada ha {int(float(linha.get('DIAS_ATRASO', 0) or 0))} dia(s)"
-    if data.date() == pd.Timestamp.today().date():
-        return "Para hoje"
-    return f"Prazo {data.strftime('%d/%m/%Y')}"
-
-
-def render_detalhes_ordem(ordem):
+def render_detalhes_item(item):
     st.markdown(
         f"""
         <div class="detail-grid">
             <div class="detail-box">
-                <div class="detail-label">Origem</div>
-                <div class="detail-value">{escape(str(ordem["ABA_ORIGEM"]))}</div>
-            </div>
-            <div class="detail-box">
-                <div class="detail-label">OP</div>
-                <div class="detail-value">{escape(str(ordem["OP"]) or "Sem OP")}</div>
-            </div>
-            <div class="detail-box">
                 <div class="detail-label">Codigo</div>
-                <div class="detail-value">{escape(str(ordem["COD_PRODUTO"]) or "Sem codigo")}</div>
-            </div>
-            <div class="detail-box">
-                <div class="detail-label">Responsavel</div>
-                <div class="detail-value">{escape(str(ordem["USUARIO_RESPONSAVEL"]) or "-")}</div>
+                <div class="detail-value">{escape(str(item.get("COD_PRODUTO", "")) or "Sem codigo")}</div>
             </div>
             <div class="detail-box">
                 <div class="detail-label">Produto</div>
-                <div class="detail-value">{escape(str(ordem["PRODUTO"]) or "-")}</div>
+                <div class="detail-value">{escape(str(item.get("PRODUTO", "")) or "-")}</div>
             </div>
             <div class="detail-box">
-                <div class="detail-label">Pendente qualidade</div>
-                <div class="detail-value">{escape(numero(ordem["QUANTIDADE_PENDENTE"]))}</div>
+                <div class="detail-label">Solicitado</div>
+                <div class="detail-value">{escape(numero(item.get("QUANTIDADE_SOLICITADA", 0)))}</div>
             </div>
             <div class="detail-box">
-                <div class="detail-label">Realizado atual</div>
-                <div class="detail-value">{escape(numero(ordem["REALIZADO_NUM"]))}</div>
+                <div class="detail-label">Pendente</div>
+                <div class="detail-value">{escape(numero(item.get("QUANTIDADE_PENDENTE", 0)))}</div>
             </div>
-            <div class="detail-box">
-                <div class="detail-label">Status</div>
-                <div class="detail-value">{escape(str(ordem.get("STATUS", "-")) or "-")}</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    observacao = str(ordem.get("OBS", "")).strip() or "-"
-    st.markdown(
-        f"""
-        <div class="obs-box">
-            <div class="obs-label">Observacoes</div>
-            <div class="obs-value">{escape(observacao)}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
 
-@st.dialog("Informacoes da ordem", width="large")
-def modal_informacao(ordem):
-    render_detalhes_ordem(ordem)
+@st.dialog("Informacoes da embalagem", width="large")
+def modal_informacao(item):
+    render_detalhes_item(item)
 
 
-@st.dialog("Aprovar qualidade", width="large")
-def modal_aprovacao(ordem, avaliadores, usuario_padrao=""):
-    render_detalhes_ordem(ordem)
-    if not avaliadores:
-        st.error("Nenhum usuario com cargo Qualidade foi encontrado.")
+@st.dialog("Concluir embalagem", width="large")
+def modal_conclusao(item, usuarios):
+    render_detalhes_item(item)
+    if not usuarios:
+        st.error("Nenhum usuario foi encontrado na aba Usuarios.")
         return
 
-    chave = f"{ordem['ABA_ORIGEM']}_{ordem['OP']}_{ordem['COD_PRODUTO']}_aprovacao"
-    trava = f"qualidade_trava_{chave}"
+    ordem = montar_ordem_embalagem(item)
+    chave = chave_css_texto(item["COD_PRODUTO"], item["PRODUTO"], "conclusao")
+    trava = f"embalagem_trava_{chave}"
     with st.form(f"form_{chave}"):
-        indice_usuario = avaliadores.index(usuario_padrao) if usuario_padrao in avaliadores else 0
-        usuario = st.selectbox("Usuario da qualidade", avaliadores, index=indice_usuario)
+        usuario = st.selectbox("Usuario da embalagem", usuarios)
         quantidade = st.number_input(
-            "Quantidade aprovada",
+            "Quantidade embalada",
             min_value=1,
-            max_value=max(1, inteiro(ordem["QUANTIDADE_PENDENTE"])),
-            value=max(1, inteiro(ordem["QUANTIDADE_PENDENTE"])),
+            max_value=max(1, inteiro(item["QUANTIDADE_PENDENTE"])),
+            value=max(1, inteiro(item["QUANTIDADE_PENDENTE"])),
             step=1,
         )
-        enviar_embalagem = st.checkbox(
-            "Enviar para embalagem",
-            key=f"embalagem_{chave}",
-            help="Encaminha a quantidade aprovada para a fila de embalagem.",
-        )
         confirmar = st.form_submit_button(
-            "Aprovacao em andamento..." if st.session_state.get(trava) else "Confirmar aprovacao",
+            "Lancamento em andamento..." if st.session_state.get(trava) else "Confirmar embalagem",
             use_container_width=True,
             disabled=bool(st.session_state.get(trava, False)),
         )
-
     if confirmar:
         st.session_state[trava] = True
         try:
-            lancar_aprovacao_qualidade(ordem, quantidade, usuario, embalagem=enviar_embalagem)
+            lancar_conclusao_embalagem(ordem, quantidade, usuario=usuario)
         except Exception as exc:
             st.session_state.pop(trava, None)
             st.error(str(exc))
         else:
             st.session_state.pop(trava, None)
-            st.success("Aprovacao registrada no historico.")
+            st.success("Embalagem registrada no historico.")
             st.rerun()
 
 
-@st.dialog("Reprovar qualidade", width="large")
-def modal_reprovacao(ordem, avaliadores, usuario_padrao=""):
-    render_detalhes_ordem(ordem)
-    if not avaliadores:
-        st.error("Nenhum usuario com cargo Qualidade foi encontrado.")
-        return
-    if not bool(ordem.get("TEM_ORDEM", False)):
-        st.error("Nao foi possivel localizar a linha da ordem na programacao atual para subtrair o realizado.")
-        return
-
-    maximo = min(inteiro(ordem["QUANTIDADE_PENDENTE"]), inteiro(ordem["REALIZADO_NUM"]))
-    if maximo <= 0:
-        st.error("Esta ordem nao possui realizado suficiente para reprovar.")
-        return
-
-    chave = f"{ordem['ABA_ORIGEM']}_{ordem['OP']}_{ordem['COD_PRODUTO']}_reprovacao"
-    trava = f"qualidade_trava_{chave}"
-    with st.form(f"form_{chave}"):
-        indice_usuario = avaliadores.index(usuario_padrao) if usuario_padrao in avaliadores else 0
-        usuario = st.selectbox("Usuario da qualidade", avaliadores, index=indice_usuario)
-        quantidade = st.number_input(
-            "Quantidade reprovada",
-            min_value=1,
-            max_value=maximo,
-            value=maximo,
-            step=1,
-        )
-        confirmar = st.form_submit_button(
-            "Reprovacao em andamento..." if st.session_state.get(trava) else "Confirmar reprovacao",
-            use_container_width=True,
-            disabled=bool(st.session_state.get(trava, False)),
-        )
-
-    if confirmar:
-        st.session_state[trava] = True
-        try:
-            lancar_reprovacao_qualidade(ordem, quantidade, usuario)
-        except Exception as exc:
-            st.session_state.pop(trava, None)
-            st.error(str(exc))
-        else:
-            st.session_state.pop(trava, None)
-            st.success("Reprovacao registrada e realizado ajustado na ordem.")
-            st.rerun()
-
-
-def render_card_qualidade(linha, avaliadores):
-    chave_css = chave_css_texto(linha["ABA_ORIGEM"], linha["OP"], linha["COD_PRODUTO"], linha["USUARIO_RESPONSAVEL"])
-    produto = str(linha["PRODUTO"]) or "Produto sem descricao"
-    op = str(linha["OP"]) or "Sem OP"
-    codigo = str(linha["COD_PRODUTO"]) or "Sem codigo"
-    em_andamento = bool(linha.get("EM_ANDAMENTO", False))
-    pausada = bool(linha.get("PAUSADA", False))
+def render_card_embalagem(item, usuarios):
+    chave_css = chave_css_texto(item["COD_PRODUTO"], item["PRODUTO"])
+    produto = str(item["PRODUTO"]) or "Produto sem descricao"
+    codigo = str(item["COD_PRODUTO"]) or "Sem codigo"
+    em_andamento = bool(item.get("EM_ANDAMENTO", False))
+    pausada = bool(item.get("PAUSADA", False))
     status_fluxo = "Pausado" if pausada else "Em andamento" if em_andamento else "Aguardando inicio"
+    ordem = montar_ordem_embalagem(item)
 
-    with st.container(border=True, key=f"qualidade_{chave_css}"):
-        col_info, col_qtd, col_acoes = st.columns([6.25, .85, 2.2], vertical_alignment="center")
+    with st.container(border=True, key=f"embalagem_{chave_css}"):
+        col_info, col_qtd, col_acoes = st.columns([6.6, .85, 1.8], vertical_alignment="center")
         with col_info:
             st.markdown(
                 f"""
-                <div class="quality-card">
-                    <div class="order-name" title="{escape(produto)}">Ordem - {escape(op)} | {escape(produto)}</div>
-                    <span class="order-meta">
-                        {escape(str(linha["ABA_ORIGEM"]))} | Cod. {escape(codigo)} | Responsavel {escape(str(linha["USUARIO_RESPONSAVEL"]))} | {escape(resumo_prazo(linha))}
-                    </span>
+                <div>
+                    <div class="order-name" title="{escape(produto)}">{escape(produto)}</div>
+                    <span class="order-meta">Cod. {escape(codigo)}</span>
                     <div class="order-badges">
-                        <span class="order-badge">Pendente qualidade {escape(numero(linha["QUANTIDADE_PENDENTE"]))}</span>
-                        <span class="order-badge">Solicitado {escape(numero(linha["QUANTIDADE_SOLICITADA"]))}</span>
-                        <span class="order-badge">Avaliado {escape(numero(linha["QUANTIDADE_AVALIADA"]))}</span>
+                        <span class="order-badge">Solicitado {escape(numero(item["QUANTIDADE_SOLICITADA"]))}</span>
+                        <span class="order-badge">Embalado {escape(numero(item["QUANTIDADE_EMBALADA"]))}</span>
                         <span class="order-badge">{escape(status_fluxo)}</span>
                     </div>
                 </div>
@@ -731,24 +591,24 @@ def render_card_qualidade(linha, avaliadores):
             st.markdown(
                 f"""
                 <div>
-                    <div class="order-number">{escape(numero(linha["QUANTIDADE_PENDENTE"]))}</div>
+                    <div class="order-number">{escape(numero(item["QUANTIDADE_PENDENTE"]))}</div>
                     <div class="order-label">pendente</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
         with col_acoes:
-            acao_1, acao_2, acao_3, acao_4, acao_5 = st.columns(5, gap="small")
+            acao_1, acao_2, acao_3, acao_4 = st.columns(4, gap="small")
             with acao_1:
                 key = f"iniciar_{chave_css}"
-                trava = f"qualidade_trava_{key}"
+                trava = f"embalagem_trava_{key}"
                 aplicar_icone_botao(key, ICONES_BOTOES["inicio"])
                 desabilitado = (em_andamento and not pausada) or bool(st.session_state.get(trava, False))
                 texto = "Retomar" if pausada else "Iniciar"
-                if st.button(texto, key=key, help="Registrar inicio/retomada da qualidade", disabled=desabilitado):
+                if st.button(texto, key=key, help="Registrar inicio/retomada da embalagem", disabled=desabilitado):
                     st.session_state[trava] = True
                     try:
-                        lancar_inicio_qualidade(linha, "")
+                        lancar_inicio_embalagem(ordem)
                     except Exception as exc:
                         st.session_state.pop(trava, None)
                         st.error(str(exc))
@@ -757,13 +617,13 @@ def render_card_qualidade(linha, avaliadores):
                         st.rerun()
             with acao_2:
                 key = f"pausar_{chave_css}"
-                trava = f"qualidade_trava_{key}"
+                trava = f"embalagem_trava_{key}"
                 aplicar_icone_botao(key, ICONES_BOTOES["pausa"])
                 desabilitado = pausada or not em_andamento or bool(st.session_state.get(trava, False))
-                if st.button("Pausar", key=key, help="Pausar contagem da qualidade", disabled=desabilitado):
+                if st.button("Pausar", key=key, help="Pausar contagem da embalagem", disabled=desabilitado):
                     st.session_state[trava] = True
                     try:
-                        lancar_pausa_qualidade(linha, "")
+                        lancar_pausa_embalagem(ordem)
                     except Exception as exc:
                         st.session_state.pop(trava, None)
                         st.error(str(exc))
@@ -771,22 +631,16 @@ def render_card_qualidade(linha, avaliadores):
                         st.session_state.pop(trava, None)
                         st.rerun()
             with acao_3:
-                key = f"aprovar_{chave_css}"
-                aplicar_icone_botao(key, ICONES_BOTOES["aprovacao"])
-                desabilitado = pausada or not em_andamento
-                if st.button("Aprovar", key=key, help="Aprovar quantidade na qualidade", disabled=desabilitado):
-                    modal_aprovacao(linha, avaliadores)
-            with acao_4:
                 key = f"consulta_{chave_css}"
                 aplicar_icone_botao(key, ICONES_BOTOES["consulta"])
-                if st.button("Informacao", key=key, help="Consultar ordem"):
-                    modal_informacao(linha)
-            with acao_5:
-                key = f"reprovar_{chave_css}"
-                aplicar_icone_botao(key, ICONES_BOTOES["reprovacao"])
+                if st.button("Informacao", key=key, help="Consultar item"):
+                    modal_informacao(item)
+            with acao_4:
+                key = f"concluir_{chave_css}"
+                aplicar_icone_botao(key, ICONES_BOTOES["conclusao"])
                 desabilitado = pausada or not em_andamento
-                if st.button("Reprovar", key=key, help="Reprovar quantidade na qualidade", disabled=desabilitado):
-                    modal_reprovacao(linha, avaliadores)
+                if st.button("Concluir", key=key, help="Concluir embalagem", disabled=desabilitado):
+                    modal_conclusao(item, usuarios)
 
 
 def opcoes_encaminhamento(ordens):
@@ -797,32 +651,32 @@ def opcoes_encaminhamento(ordens):
     base = base[base["REALIZADO_NUM"] > 0].copy()
     if base.empty:
         return base
-    base["ROTULO_QUALIDADE"] = base.apply(
+    base["ROTULO_EMBALAGEM"] = base.apply(
         lambda linha: f"{linha['ABA_ORIGEM']} | OP {linha['OP']} | {linha['COD_PRODUTO']} | {str(linha['PRODUTO'])[:80]}",
         axis=1,
     )
-    return base.sort_values(["ABA_ORIGEM", "OP", "COD_PRODUTO"])
+    return base.sort_values(["COD_PRODUTO", "PRODUTO"])
 
 
-def render_puxar_ordem_qualidade(ordens):
+def render_puxar_ordem_embalagem(ordens):
     opcoes = opcoes_encaminhamento(ordens)
     if opcoes.empty:
         return
-    with st.expander("Puxar ordem para qualidade"):
-        with st.form("form_puxar_qualidade"):
-            rotulos = opcoes["ROTULO_QUALIDADE"].tolist()
-            selecionado = st.selectbox("Ordem", rotulos)
-            ordem = opcoes[opcoes["ROTULO_QUALIDADE"] == selecionado].iloc[0]
+    with st.expander("Puxar item para embalagem"):
+        with st.form("form_puxar_embalagem"):
+            rotulos = opcoes["ROTULO_EMBALAGEM"].tolist()
+            selecionado = st.selectbox("Ordem/item", rotulos)
+            ordem = opcoes[opcoes["ROTULO_EMBALAGEM"] == selecionado].iloc[0]
             maximo = max(1, inteiro(ordem["REALIZADO_NUM"]))
             quantidade = st.number_input("Quantidade", min_value=1, max_value=maximo, value=maximo, step=1)
-            confirmar = st.form_submit_button("Enviar para qualidade", use_container_width=True)
+            confirmar = st.form_submit_button("Enviar para embalagem", use_container_width=True)
         if confirmar:
             try:
-                lancar_encaminhamento_qualidade(ordem, quantidade)
+                lancar_encaminhamento_embalagem(ordem, quantidade)
             except Exception as exc:
                 st.error(str(exc))
             else:
-                st.success("Ordem enviada para qualidade.")
+                st.success("Item enviado para embalagem.")
                 st.rerun()
 
 
@@ -836,8 +690,8 @@ st.markdown(
     f"""
     <div class="page-head">
         <div>
-            <h1>Qualidade</h1>
-            <p>Ordens enviadas para aprovacao ou reprovacao da qualidade.</p>
+            <h1>Embalagens</h1>
+            <p>Itens aprovados e aguardando registro de embalagem.</p>
         </div>
         <div class="page-logos">
             <img src="data:image/bmp;base64,{logo_branco}" alt="Trendx">
@@ -854,19 +708,19 @@ try:
     ordens = carregar_ordens()
     historico = carregar_historico()
 except Exception as exc:
-    st.error("Nao foi possivel carregar os dados da qualidade.")
+    st.error("Nao foi possivel carregar os dados de embalagem.")
     st.caption(str(exc))
     st.stop()
 
-avaliadores = usuarios_qualidade(usuarios)
-fila = montar_fila_qualidade(historico, ordens)
+operadores = usuarios_embalagem(usuarios)
+fila = montar_fila_embalagem(historico)
 
 f1, f2 = st.columns([5.6, 1], vertical_alignment="bottom")
 with f1:
-    if not avaliadores:
-        st.warning("Nenhum usuario com cargo Qualidade foi encontrado na aba Usuarios.")
+    if not operadores:
+        st.warning("Nenhum usuario foi encontrado na aba Usuarios.")
 with f2:
-    if st.button("Atualizar", key="qualidade_atualizar", use_container_width=True):
+    if st.button("Atualizar", key="embalagem_atualizar", use_container_width=True):
         carregar_usuarios.clear()
         carregar_ordens.clear()
         carregar_historico.clear()
@@ -874,17 +728,16 @@ with f2:
 
 k1, k2, k3 = st.columns(3)
 with k1:
-    render_kpi("Ordens na qualidade", len(fila), "Lancamentos aguardando avaliacao")
+    render_kpi("Itens na embalagem", len(fila), "Produtos aguardando embalagem")
 with k2:
-    render_kpi("Qtd. pendente", numero(fila["QUANTIDADE_PENDENTE"].sum() if not fila.empty else 0), "Total aguardando qualidade")
+    render_kpi("Qtd. pendente", numero(fila["QUANTIDADE_PENDENTE"].sum() if not fila.empty else 0), "Total a embalar")
 with k3:
-    sem_linha = int((~fila["TEM_ORDEM"]).sum()) if not fila.empty and "TEM_ORDEM" in fila.columns else 0
-    render_kpi("Sem linha atual", sem_linha, "Pendencias sem ordem localizada")
+    render_kpi("Qtd. embalada", numero(fila["QUANTIDADE_EMBALADA"].sum() if not fila.empty else 0), "Total registrado no periodo")
 
-st.markdown('<div class="panel-title">Pendencias da qualidade</div>', unsafe_allow_html=True)
-render_puxar_ordem_qualidade(ordens)
+st.markdown('<div class="panel-title">Pendencias de embalagem</div>', unsafe_allow_html=True)
+render_puxar_ordem_embalagem(ordens)
 if fila.empty:
-    st.markdown('<div class="obs-box"><div class="obs-value">Nenhuma ordem pendente para qualidade.</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="obs-box"><div class="obs-value">Nenhum item pendente para embalagem.</div></div>', unsafe_allow_html=True)
 else:
     for _, linha in fila.iterrows():
-        render_card_qualidade(linha, avaliadores)
+        render_card_embalagem(linha, operadores)

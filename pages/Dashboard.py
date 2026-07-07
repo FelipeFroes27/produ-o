@@ -7,7 +7,7 @@ from html import escape
 from pathlib import Path
 
 from utils.display_mode import ativar_modo_exibicao, render_menu_lateral
-from utils.sheets import carregar_bd_produtos, carregar_feriados, carregar_historico, carregar_ordens
+from utils.sheets import acao_base_historico, acao_etapa_historico, acao_produtiva_historico, carregar_bd_produtos, carregar_feriados, carregar_historico, carregar_ordens
 from utils.tempo_trabalho import calcular_horas_comerciais_intervalos, formatar_duracao_horas, intervalos_ativos_por_lancamentos, montar_datas_feriados
 
 
@@ -523,6 +523,7 @@ def render_sidebar():
         st.page_link("app.py", label="Inicio")
         st.page_link("pages/Producao.py", label="Producao")
         st.page_link("pages/Qualidade.py", label="Qualidade")
+        st.page_link("pages/Embalagens.py", label="Embalagens")
         st.page_link("pages/Historico_OP.py", label="Histórico OP")
         st.page_link("pages/Dashboard.py", label="Dashboard")
 
@@ -766,9 +767,10 @@ def historico_realizado(historico):
     if "ACAO" not in historico.columns:
         return historico
 
-    acao = historico["ACAO"].fillna("").astype(str).str.strip().str.upper()
+    acao = historico["ACAO"].map(acao_base_historico)
+    produtiva = historico["ACAO"].map(acao_produtiva_historico)
     return historico[
-        acao.isin(["PARCIAL", "FIM"])
+        produtiva
         | ((acao == "") & (historico["QUANTIDADE_NUM"] > 0))
     ].copy()
 
@@ -1240,11 +1242,17 @@ def calcular_leadtime(historico, feriados=None):
         return pd.DataFrame(columns=colunas)
 
     dados = historico.copy()
-    dados["ACAO_NORM"] = dados["ACAO"].fillna("").astype(str).str.strip().str.upper()
+    dados["ACAO_NORM"] = dados["ACAO"].map(acao_base_historico)
+    dados["ACAO_ETAPA"] = dados["ACAO"].map(acao_etapa_historico)
+    dados["ACAO_PRODUTIVA"] = dados["ACAO"].map(acao_produtiva_historico)
+    etapa_planejamento = dados["ACAO_ETAPA"].isin(["PRODUCAO", "MANUTENCAO", "PECAS"])
     dados = dados[
         dados["OP"].astype(str).str.strip().ne("")
         & dados["DATA_HORA_DT"].notna()
-        & dados["ACAO_NORM"].isin(["INICIO", "PAUSA", "PARCIAL", "FIM"])
+        & (
+            (dados["ACAO_NORM"].isin(["INICIO", "PAUSA"]) & etapa_planejamento)
+            | dados["ACAO_PRODUTIVA"]
+        )
     ].copy()
     if dados.empty:
         return pd.DataFrame(columns=colunas)
@@ -1259,19 +1267,19 @@ def calcular_leadtime(historico, feriados=None):
         .rename("Inicio")
     )
     fim = (
-        dados[(dados["ACAO_NORM"] == "FIM") & (dados["QUANTIDADE_NUM"] > 0)]
+        dados[(dados["ACAO_NORM"] == "FIM") & dados["ACAO_PRODUTIVA"] & (dados["QUANTIDADE_NUM"] > 0)]
         .groupby(chaves, dropna=False)["DATA_HORA_DT"]
         .max()
         .rename("Fim")
     )
     movimento = (
-        dados[dados["ACAO_NORM"].isin(["PARCIAL", "FIM"]) & (dados["QUANTIDADE_NUM"] > 0)]
+        dados[dados["ACAO_PRODUTIVA"] & (dados["QUANTIDADE_NUM"] > 0)]
         .groupby(chaves, dropna=False)["DATA_HORA_DT"]
         .max()
         .rename("Movimento")
     )
     quantidade = (
-        dados[dados["ACAO_NORM"].isin(["PARCIAL", "FIM"]) & (dados["QUANTIDADE_NUM"] > 0)]
+        dados[dados["ACAO_PRODUTIVA"] & (dados["QUANTIDADE_NUM"] > 0)]
         .groupby(chaves, dropna=False)["QUANTIDADE_NUM"]
         .sum()
         .rename("Quantidade_movimentada")
@@ -1288,9 +1296,13 @@ def calcular_leadtime(historico, feriados=None):
     for chave, grupo in dados.groupby(chaves, dropna=False):
         if not isinstance(chave, tuple):
             chave = (chave,)
-        fim_grupo = grupo[(grupo["ACAO_NORM"] == "FIM") & (grupo["QUANTIDADE_NUM"] > 0)]["DATA_HORA_DT"].max()
+        fim_grupo = grupo[
+            (grupo["ACAO_NORM"] == "FIM")
+            & grupo["ACAO_PRODUTIVA"]
+            & (grupo["QUANTIDADE_NUM"] > 0)
+        ]["DATA_HORA_DT"].max()
         movimento_grupo = grupo[
-            grupo["ACAO_NORM"].isin(["PARCIAL", "FIM"])
+            grupo["ACAO_PRODUTIVA"]
             & (grupo["QUANTIDADE_NUM"] > 0)
         ]["DATA_HORA_DT"].max()
         if pd.notna(fim_grupo):
