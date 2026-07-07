@@ -444,8 +444,8 @@ def montar_fila_qualidade(historico, ordens):
     avaliacoes = (
         dados[
             (
-                (dados["ACAO_NORM"].isin(["PARCIAL", "FIM"]) & (dados["ACAO_ETAPA"] == "QUALIDADE"))
-                | ((dados["ACAO_NORM"] == "REPROVADO") & (dados["ACAO_ETAPA"] == "QUALIDADE"))
+                dados["ACAO_NORM"].isin(["APROVADO", "REPROVADO", "PARCIAL", "FIM"])
+                & (dados["ACAO_ETAPA"] == "QUALIDADE")
             )
             & (dados["QUANTIDADE_NUM"] > 0)
         ]
@@ -492,7 +492,7 @@ def montar_fila_qualidade(historico, ordens):
         fila["TEM_ORDEM"] = False
 
     controles = dados[
-        dados["ACAO_NORM"].isin(["INICIO", "PAUSA", "FIM", "REPROVADO"])
+        dados["ACAO_NORM"].isin(["INICIO", "PAUSA", "FIM"])
         & (dados["ACAO_ETAPA"] == "QUALIDADE")
         & dados["DATA_HORA_DT"].notna()
     ].copy()

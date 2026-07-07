@@ -8,3 +8,4 @@ streamlit.err.log
 historico_backup_*.csv
 auditoria_historico_*.csv
 correcao_historico_planejamento_*.csv
+correcao_qualidade_*.csv

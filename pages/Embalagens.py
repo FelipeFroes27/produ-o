@@ -663,7 +663,7 @@ def opcoes_encaminhamento(ordens, historico):
 
     aprovadas = (
         dados[
-            dados["ACAO_NORM"].isin(["PARCIAL", "FIM"])
+            dados["ACAO_NORM"].isin(["APROVADO", "PARCIAL", "FIM"])
             & (dados["ACAO_ETAPA"] == "QUALIDADE")
             & (dados["QUANTIDADE_NUM"] > 0)
         ]

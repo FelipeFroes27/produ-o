@@ -450,7 +450,19 @@ def lancar_aprovacao_qualidade(ordem, quantidade_aprovada, avaliador, embalagem=
     if quantidade_aprovada <= 0:
         raise ValueError("Informe uma quantidade maior que zero.")
 
-    lancar_movimento_setor(ordem, quantidade_aprovada, "Qualidade", usuario=avaliador)
+    ultima_acao = ultima_acao_setor_ordem(ordem, "Qualidade")
+    if ultima_acao != "INICIO":
+        if ultima_acao == "PAUSA":
+            raise ValueError("Retome a etapa de qualidade antes de aprovar.")
+        raise ValueError("Inicie a etapa de qualidade antes de aprovar.")
+
+    pendente = float(ordem.get("QUANTIDADE_PENDENTE", 0) or 0)
+    if quantidade_aprovada > pendente:
+        raise ValueError(f"A quantidade aprovada passa do pendente de qualidade ({_formatar_numero(pendente)}).")
+
+    registrar_historico(ordem, quantidade_aprovada, acao_descritiva("Aprovado", "Qualidade"), avaliador=avaliador)
+    if quantidade_aprovada >= pendente:
+        registrar_historico(ordem, 0, acao_descritiva("Fim", "Qualidade"), avaliador=avaliador)
     if embalagem:
         registrar_historico(
             ordem,
@@ -487,6 +499,9 @@ def lancar_reprovacao_qualidade(ordem, quantidade_reprovada, avaliador):
             acao_descritiva("Reprovado", "Qualidade"),
             avaliador=avaliador,
         )
+        pendente_qualidade = float(ordem.get("QUANTIDADE_PENDENTE", 0) or 0)
+        if quantidade_reprovada >= pendente_qualidade:
+            registrar_historico(ordem, 0, acao_descritiva("Fim", "Qualidade"), avaliador=avaliador)
     except Exception as exc:
         try:
             worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(realizado_atual))
@@ -677,7 +692,7 @@ def ultima_acao_setor_ordem(ordem, setor):
         acao = valor_linha(row, col_acao)
         acao_base = acao_base_historico(acao)
         acao_etapa = acao_etapa_historico(acao)
-        if acao_base not in ["INICIO", "PAUSA", "FIM", "REPROVADO"] or acao_etapa != setor_norm:
+        if acao_base not in ["INICIO", "PAUSA", "FIM"] or acao_etapa != setor_norm:
             continue
 
         if (

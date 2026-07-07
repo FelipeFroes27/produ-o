@@ -22,6 +22,7 @@ SETOR_NORMALIZADO_PARA_LABEL = {
 }
 SETOR_LABEL_PARA_NORMALIZADO = {valor: chave for chave, valor in SETOR_NORMALIZADO_PARA_LABEL.items()}
 SETORES_PLANEJAMENTO_NORM = {"PRODUCAO", "MANUTENCAO", "PECAS"}
+ACOES_MOVIMENTO_DASHBOARD = ["PARCIAL", "FIM", "APROVADO", "REPROVADO"]
 
 
 st.set_page_config(
@@ -628,13 +629,7 @@ def aplicar_filtros(programacao, historico):
         for usuario in set(usuarios_base.dropna().astype(str))
         if usuario and usuario != "Sem responsavel"
     )
-    setores_disponiveis = [
-        setor for setor in SETORES_DASHBOARD
-        if (
-            setor in set(programacao.get("ABA_ORIGEM", pd.Series(dtype=str)).dropna().astype(str))
-            or setor in set(historico.get("SETOR", pd.Series(dtype=str)).dropna().astype(str))
-        )
-    ] or SETORES_DASHBOARD
+    setores_disponiveis = SETORES_DASHBOARD
 
     st.markdown('<p class="side-label">Filtros</p>', unsafe_allow_html=True)
     usuarios_selecionados = st.multiselect("Usuario", usuarios, default=usuarios)
@@ -818,10 +813,9 @@ def historico_realizado(historico):
         return historico
 
     acao = historico["ACAO_BASE"] if "ACAO_BASE" in historico.columns else historico["ACAO"].map(acao_base_historico)
-    return historico[
-        acao.isin(["PARCIAL", "FIM"])
-        | ((acao == "") & (historico["QUANTIDADE_NUM"] > 0))
-    ].copy()
+    movimentos = acao.isin(ACOES_MOVIMENTO_DASHBOARD) & (historico["QUANTIDADE_NUM"] > 0)
+    legado_sem_acao = (acao == "") & (historico["QUANTIDADE_NUM"] > 0)
+    return historico[movimentos | legado_sem_acao].copy()
 
 
 def formatar_numero(valor):
@@ -1296,7 +1290,7 @@ def calcular_leadtime(historico, feriados=None):
     dados["ACAO_ETAPA"] = dados["ACAO_ETAPA"] if "ACAO_ETAPA" in dados.columns else dados["ACAO"].map(acao_etapa_historico)
     if "SETOR" not in dados.columns:
         dados["SETOR"] = dados["ACAO_ETAPA"].map(SETOR_NORMALIZADO_PARA_LABEL).fillna("")
-    movimento_setor = dados["ACAO_NORM"].isin(["PARCIAL", "FIM"]) & dados["SETOR"].isin(SETORES_DASHBOARD)
+    movimento_setor = dados["ACAO_NORM"].isin(ACOES_MOVIMENTO_DASHBOARD) & dados["SETOR"].isin(SETORES_DASHBOARD)
     dados = dados[
         dados["DATA_HORA_DT"].notna()
         & dados["SETOR"].isin(SETORES_DASHBOARD)
@@ -1318,19 +1312,19 @@ def calcular_leadtime(historico, feriados=None):
         .rename("Inicio")
     )
     fim = (
-        dados[(dados["ACAO_NORM"] == "FIM") & (dados["QUANTIDADE_NUM"] > 0)]
+        dados[dados["ACAO_NORM"] == "FIM"]
         .groupby(chaves, dropna=False)["DATA_HORA_DT"]
         .max()
         .rename("Fim")
     )
     movimento = (
-        dados[dados["ACAO_NORM"].isin(["PARCIAL", "FIM"]) & (dados["QUANTIDADE_NUM"] > 0)]
+        dados[dados["ACAO_NORM"].isin(ACOES_MOVIMENTO_DASHBOARD) & (dados["QUANTIDADE_NUM"] > 0)]
         .groupby(chaves, dropna=False)["DATA_HORA_DT"]
         .max()
         .rename("Movimento")
     )
     quantidade = (
-        dados[dados["ACAO_NORM"].isin(["PARCIAL", "FIM"]) & (dados["QUANTIDADE_NUM"] > 0)]
+        dados[dados["ACAO_NORM"].isin(ACOES_MOVIMENTO_DASHBOARD) & (dados["QUANTIDADE_NUM"] > 0)]
         .groupby(chaves, dropna=False)["QUANTIDADE_NUM"]
         .sum()
         .rename("Quantidade_movimentada")
@@ -1349,10 +1343,9 @@ def calcular_leadtime(historico, feriados=None):
             chave = (chave,)
         fim_grupo = grupo[
             (grupo["ACAO_NORM"] == "FIM")
-            & (grupo["QUANTIDADE_NUM"] > 0)
         ]["DATA_HORA_DT"].max()
         movimento_grupo = grupo[
-            grupo["ACAO_NORM"].isin(["PARCIAL", "FIM"])
+            grupo["ACAO_NORM"].isin(ACOES_MOVIMENTO_DASHBOARD)
             & (grupo["QUANTIDADE_NUM"] > 0)
         ]["DATA_HORA_DT"].max()
         if pd.notna(fim_grupo):
