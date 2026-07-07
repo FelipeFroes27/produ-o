@@ -2,9 +2,14 @@ import streamlit as st
 
 
 MENU_ABERTO_PADRAO = True
+MANUTENCAO_ATIVA = True
 
 
 def render_menu_lateral():
+    if MANUTENCAO_ATIVA:
+        _render_manutencao()
+        st.stop()
+
     if "menu_lateral_aberto" not in st.session_state:
         st.session_state.menu_lateral_aberto = MENU_ABERTO_PADRAO
 
@@ -23,6 +28,53 @@ def ativar_modo_exibicao(pagina_atual):
     st.session_state.modo_exibicao_ativo = False
     st.session_state.modo_exibicao_navegando = False
     st.session_state.modo_exibicao_proxima_troca = None
+
+
+def _render_manutencao():
+    st.markdown(
+        """
+        <style>
+        .maintenance-wrap {
+            min-height: 72vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 32px 16px;
+        }
+
+        .maintenance-box {
+            width: min(760px, 100%);
+            border: 2px solid #000000;
+            border-radius: 8px;
+            background: #ffffff;
+            padding: 30px;
+            text-align: center;
+            color: #000000;
+        }
+
+        .maintenance-box h1 {
+            margin: 0 0 12px 0;
+            font-size: 34px;
+            line-height: 1.1;
+            font-weight: 900;
+        }
+
+        .maintenance-box p {
+            margin: 0;
+            font-size: 18px;
+            line-height: 1.45;
+            font-weight: 700;
+        }
+        </style>
+        <div class="maintenance-wrap">
+            <div class="maintenance-box">
+                <h1>Em manutencao</h1>
+                <p>Todas as ordens em processo serao pausadas e retornarao automaticamente.</p>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _aplicar_css_base():
