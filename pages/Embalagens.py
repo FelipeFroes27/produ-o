@@ -381,6 +381,13 @@ def chave_produto(df):
     )
 
 
+def chave_fluxo(df):
+    return df[["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO", "USUARIO_RESPONSAVEL"]].fillna("").astype(str).apply(
+        lambda linha: "|".join(chave_texto(valor) for valor in linha),
+        axis=1,
+    )
+
+
 def montar_ordem_embalagem(linha):
     return {
         "USUARIO_RESPONSAVEL": "",
@@ -643,14 +650,64 @@ def render_card_embalagem(item, usuarios):
                     modal_conclusao(item, usuarios)
 
 
-def opcoes_encaminhamento(ordens):
-    if ordens.empty:
+def opcoes_encaminhamento(ordens, historico):
+    if ordens.empty or historico.empty or "ACAO" not in historico.columns:
         return pd.DataFrame()
-    base = ordens.copy()
-    base["REALIZADO_NUM"] = pd.to_numeric(base["REALIZADO_NUM"], errors="coerce").fillna(0)
-    base = base[base["REALIZADO_NUM"] > 0].copy()
+
+    dados = historico.copy()
+    dados["ACAO_NORM"] = dados["ACAO"].map(acao_base_historico)
+    dados["ACAO_ETAPA"] = dados["ACAO"].map(acao_etapa_historico)
+    dados["QUANTIDADE_NUM"] = pd.to_numeric(dados["QUANTIDADE_NUM"], errors="coerce").fillna(0)
+    dados = dados.rename(columns={"CODIGO": "COD_PRODUTO", "TIPO": "ABA_ORIGEM"})
+    chaves = ["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO", "USUARIO_RESPONSAVEL"]
+
+    aprovadas = (
+        dados[
+            dados["ACAO_NORM"].isin(["PARCIAL", "FIM"])
+            & (dados["ACAO_ETAPA"] == "QUALIDADE")
+            & (dados["QUANTIDADE_NUM"] > 0)
+        ]
+        .groupby(chaves, dropna=False)["QUANTIDADE_NUM"]
+        .sum()
+        .rename("QUANTIDADE_APROVADA")
+        .reset_index()
+    )
+    if aprovadas.empty:
+        return pd.DataFrame()
+
+    entradas = (
+        dados[
+            (dados["ACAO_NORM"] == "ENTRADA")
+            & (dados["ACAO_ETAPA"] == "EMBALAGEM")
+            & (dados["QUANTIDADE_NUM"] > 0)
+        ]
+        .groupby(chaves, dropna=False)["QUANTIDADE_NUM"]
+        .sum()
+        .rename("QUANTIDADE_ENVIADA_EMBALAGEM")
+        .reset_index()
+    )
+    base = aprovadas.merge(entradas, on=chaves, how="left")
+    base["QUANTIDADE_ENVIADA_EMBALAGEM"] = base["QUANTIDADE_ENVIADA_EMBALAGEM"].fillna(0)
+    base["QUANTIDADE_DISPONIVEL"] = (
+        base["QUANTIDADE_APROVADA"] - base["QUANTIDADE_ENVIADA_EMBALAGEM"]
+    ).clip(lower=0)
+    base = base[base["QUANTIDADE_DISPONIVEL"] > 0].copy()
     if base.empty:
         return base
+
+    ordens_base = ordens.copy()
+    ordens_base["CHAVE_FLUXO"] = chave_fluxo(ordens_base)
+    base["CHAVE_FLUXO"] = chave_fluxo(base)
+    base = base.merge(
+        ordens_base.drop_duplicates("CHAVE_FLUXO", keep="first"),
+        on="CHAVE_FLUXO",
+        how="left",
+        suffixes=("", "_ORDEM"),
+    )
+    for coluna in chaves:
+        coluna_ordem = f"{coluna}_ORDEM"
+        if coluna_ordem in base.columns:
+            base[coluna] = base[coluna_ordem].where(base[coluna_ordem].fillna("").astype(str).str.strip().ne(""), base[coluna])
     base["ROTULO_EMBALAGEM"] = base.apply(
         lambda linha: f"{linha['ABA_ORIGEM']} | OP {linha['OP']} | {linha['COD_PRODUTO']} | {str(linha['PRODUTO'])[:80]}",
         axis=1,
@@ -658,8 +715,8 @@ def opcoes_encaminhamento(ordens):
     return base.sort_values(["COD_PRODUTO", "PRODUTO"])
 
 
-def render_puxar_ordem_embalagem(ordens):
-    opcoes = opcoes_encaminhamento(ordens)
+def render_puxar_ordem_embalagem(ordens, historico):
+    opcoes = opcoes_encaminhamento(ordens, historico)
     if opcoes.empty:
         return
     with st.expander("Puxar item para embalagem"):
@@ -667,7 +724,7 @@ def render_puxar_ordem_embalagem(ordens):
             rotulos = opcoes["ROTULO_EMBALAGEM"].tolist()
             selecionado = st.selectbox("Ordem/item", rotulos)
             ordem = opcoes[opcoes["ROTULO_EMBALAGEM"] == selecionado].iloc[0]
-            maximo = max(1, inteiro(ordem["REALIZADO_NUM"]))
+            maximo = max(1, inteiro(ordem["QUANTIDADE_DISPONIVEL"]))
             quantidade = st.number_input("Quantidade", min_value=1, max_value=maximo, value=maximo, step=1)
             confirmar = st.form_submit_button("Enviar para embalagem", use_container_width=True)
         if confirmar:
@@ -735,7 +792,7 @@ with k3:
     render_kpi("Qtd. embalada", numero(fila["QUANTIDADE_EMBALADA"].sum() if not fila.empty else 0), "Total registrado no periodo")
 
 st.markdown('<div class="panel-title">Pendencias de embalagem</div>', unsafe_allow_html=True)
-render_puxar_ordem_embalagem(ordens)
+render_puxar_ordem_embalagem(ordens, historico)
 if fila.empty:
     st.markdown('<div class="obs-box"><div class="obs-value">Nenhum item pendente para embalagem.</div></div>', unsafe_allow_html=True)
 else:

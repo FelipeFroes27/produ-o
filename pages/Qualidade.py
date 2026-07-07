@@ -789,14 +789,71 @@ def render_card_qualidade(linha, avaliadores):
                     modal_reprovacao(linha, avaliadores)
 
 
-def opcoes_encaminhamento(ordens):
-    if ordens.empty:
+def chave_fluxo(df):
+    return df[["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO", "USUARIO_RESPONSAVEL"]].fillna("").astype(str).apply(
+        lambda linha: "|".join(chave_texto(valor) for valor in linha),
+        axis=1,
+    )
+
+
+def opcoes_encaminhamento(ordens, historico):
+    if ordens.empty or historico.empty or "ACAO" not in historico.columns:
         return pd.DataFrame()
-    base = ordens.copy()
-    base["REALIZADO_NUM"] = pd.to_numeric(base["REALIZADO_NUM"], errors="coerce").fillna(0)
-    base = base[base["REALIZADO_NUM"] > 0].copy()
+
+    dados = historico.copy()
+    dados["ACAO_NORM"] = dados["ACAO"].map(acao_base_historico)
+    dados["ACAO_ETAPA"] = dados["ACAO"].map(acao_etapa_historico)
+    dados["QUANTIDADE_NUM"] = pd.to_numeric(dados["QUANTIDADE_NUM"], errors="coerce").fillna(0)
+    dados = dados.rename(columns={"CODIGO": "COD_PRODUTO", "TIPO": "ABA_ORIGEM"})
+    chaves = ["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO", "USUARIO_RESPONSAVEL"]
+
+    finalizadas = (
+        dados[
+            (dados["ACAO_NORM"] == "FIM")
+            & dados["ACAO_ETAPA"].isin(["PRODUCAO", "MANUTENCAO", "PECAS"])
+            & (dados["QUANTIDADE_NUM"] > 0)
+        ]
+        .groupby(chaves, dropna=False)["QUANTIDADE_NUM"]
+        .sum()
+        .rename("QUANTIDADE_FINALIZADA")
+        .reset_index()
+    )
+    if finalizadas.empty:
+        return pd.DataFrame()
+
+    entradas = (
+        dados[
+            (dados["ACAO_NORM"] == "ENTRADA")
+            & (dados["ACAO_ETAPA"] == "QUALIDADE")
+            & (dados["QUANTIDADE_NUM"] > 0)
+        ]
+        .groupby(chaves, dropna=False)["QUANTIDADE_NUM"]
+        .sum()
+        .rename("QUANTIDADE_ENVIADA_QUALIDADE")
+        .reset_index()
+    )
+    base = finalizadas.merge(entradas, on=chaves, how="left")
+    base["QUANTIDADE_ENVIADA_QUALIDADE"] = base["QUANTIDADE_ENVIADA_QUALIDADE"].fillna(0)
+    base["QUANTIDADE_DISPONIVEL"] = (
+        base["QUANTIDADE_FINALIZADA"] - base["QUANTIDADE_ENVIADA_QUALIDADE"]
+    ).clip(lower=0)
+    base = base[base["QUANTIDADE_DISPONIVEL"] > 0].copy()
     if base.empty:
         return base
+
+    ordens_base = ordens.copy()
+    ordens_base["CHAVE_FLUXO"] = chave_fluxo(ordens_base)
+    base["CHAVE_FLUXO"] = chave_fluxo(base)
+    base = base.merge(
+        ordens_base.drop_duplicates("CHAVE_FLUXO", keep="first"),
+        on="CHAVE_FLUXO",
+        how="left",
+        suffixes=("", "_ORDEM"),
+    )
+    for coluna in chaves:
+        coluna_ordem = f"{coluna}_ORDEM"
+        if coluna_ordem in base.columns:
+            base[coluna] = base[coluna_ordem].where(base[coluna_ordem].fillna("").astype(str).str.strip().ne(""), base[coluna])
     base["ROTULO_QUALIDADE"] = base.apply(
         lambda linha: f"{linha['ABA_ORIGEM']} | OP {linha['OP']} | {linha['COD_PRODUTO']} | {str(linha['PRODUTO'])[:80]}",
         axis=1,
@@ -804,8 +861,8 @@ def opcoes_encaminhamento(ordens):
     return base.sort_values(["ABA_ORIGEM", "OP", "COD_PRODUTO"])
 
 
-def render_puxar_ordem_qualidade(ordens):
-    opcoes = opcoes_encaminhamento(ordens)
+def render_puxar_ordem_qualidade(ordens, historico):
+    opcoes = opcoes_encaminhamento(ordens, historico)
     if opcoes.empty:
         return
     with st.expander("Puxar ordem para qualidade"):
@@ -813,7 +870,7 @@ def render_puxar_ordem_qualidade(ordens):
             rotulos = opcoes["ROTULO_QUALIDADE"].tolist()
             selecionado = st.selectbox("Ordem", rotulos)
             ordem = opcoes[opcoes["ROTULO_QUALIDADE"] == selecionado].iloc[0]
-            maximo = max(1, inteiro(ordem["REALIZADO_NUM"]))
+            maximo = max(1, inteiro(ordem["QUANTIDADE_DISPONIVEL"]))
             quantidade = st.number_input("Quantidade", min_value=1, max_value=maximo, value=maximo, step=1)
             confirmar = st.form_submit_button("Enviar para qualidade", use_container_width=True)
         if confirmar:
@@ -882,7 +939,7 @@ with k3:
     render_kpi("Sem linha atual", sem_linha, "Pendencias sem ordem localizada")
 
 st.markdown('<div class="panel-title">Pendencias da qualidade</div>', unsafe_allow_html=True)
-render_puxar_ordem_qualidade(ordens)
+render_puxar_ordem_qualidade(ordens, historico)
 if fila.empty:
     st.markdown('<div class="obs-box"><div class="obs-value">Nenhuma ordem pendente para qualidade.</div></div>', unsafe_allow_html=True)
 else:
