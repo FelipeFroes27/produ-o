@@ -97,7 +97,7 @@ def acao_descritiva(acao, etapa=""):
 def acao_base_historico(acao):
     acao_norm = _normalizar(acao)
     for base in ["ENTRADA", "INICIO", "PAUSA", "PARCIAL", "FIM", "QUALIDADE", "APROVADO", "REPROVADO", "EMBALAGEM"]:
-        if acao_norm == base or acao_norm.startswith(f"{base} "):
+        if acao_norm == base or acao_norm.startswith(base):
             return base
     return acao_norm
 
@@ -113,7 +113,22 @@ def acao_etapa_historico(acao):
         if base == "EMBALAGEM":
             return "EMBALAGEM"
         return ""
-    return acao_norm[len(base):].strip()
+    return _normalizar_etapa_historico(acao_norm[len(base):].strip())
+
+
+def _normalizar_etapa_historico(etapa):
+    etapa_norm = _normalizar(etapa)
+    if etapa_norm.startswith("PRODU"):
+        return "PRODUCAO"
+    if etapa_norm.startswith("MANUTEN"):
+        return "MANUTENCAO"
+    if etapa_norm.startswith("PEC") or etapa_norm.startswith("PEA") or etapa_norm == "PEAS":
+        return "PECAS"
+    if etapa_norm.startswith("QUALIDADE"):
+        return "QUALIDADE"
+    if etapa_norm.startswith("EMBALAGEM"):
+        return "EMBALAGEM"
+    return etapa_norm
 
 
 def acao_produtiva_historico(acao):

@@ -12,6 +12,16 @@ from utils.tempo_trabalho import calcular_horas_comerciais_intervalos, formatar_
 
 
 COLUNAS_META_PRODUTO = ["CATEGORIA", "MARCA", "GRUPO"]
+SETORES_DASHBOARD = ["Produção", "Manutenção", "Peças", "Qualidade", "Embalagem"]
+SETOR_NORMALIZADO_PARA_LABEL = {
+    "PRODUCAO": "Produção",
+    "MANUTENCAO": "Manutenção",
+    "PECAS": "Peças",
+    "QUALIDADE": "Qualidade",
+    "EMBALAGEM": "Embalagem",
+}
+SETOR_LABEL_PARA_NORMALIZADO = {valor: chave for chave, valor in SETOR_NORMALIZADO_PARA_LABEL.items()}
+SETORES_PLANEJAMENTO_NORM = {"PRODUCAO", "MANUTENCAO", "PECAS"}
 
 
 st.set_page_config(
@@ -606,20 +616,29 @@ def opcoes_combobox(serie):
 
 
 def aplicar_filtros(programacao, historico):
+    usuarios_base = pd.concat(
+        [
+            programacao.get("USUARIO_RESPONSAVEL", pd.Series(dtype=str)),
+            historico.get("USUARIO_RESPONSAVEL", pd.Series(dtype=str)),
+        ],
+        ignore_index=True,
+    )
     usuarios = sorted(
         usuario
-        for usuario in set(programacao.get("USUARIO_RESPONSAVEL", pd.Series(dtype=str)).dropna().astype(str))
+        for usuario in set(usuarios_base.dropna().astype(str))
         if usuario and usuario != "Sem responsavel"
     )
-    tipos = sorted(
-        tipo
-        for tipo in set(programacao.get("ABA_ORIGEM", pd.Series(dtype=str)).dropna().astype(str))
-        if tipo
-    )
+    setores_disponiveis = [
+        setor for setor in SETORES_DASHBOARD
+        if (
+            setor in set(programacao.get("ABA_ORIGEM", pd.Series(dtype=str)).dropna().astype(str))
+            or setor in set(historico.get("SETOR", pd.Series(dtype=str)).dropna().astype(str))
+        )
+    ] or SETORES_DASHBOARD
 
     st.markdown('<p class="side-label">Filtros</p>', unsafe_allow_html=True)
     usuarios_selecionados = st.multiselect("Usuario", usuarios, default=usuarios)
-    tipos_selecionados = st.multiselect("Tipo", tipos, default=tipos)
+    setores_selecionados = st.multiselect("Setores", setores_disponiveis, default=setores_disponiveis)
 
     if usuarios_selecionados:
         programacao = programacao[programacao["USUARIO_RESPONSAVEL"].isin(usuarios_selecionados)]
@@ -628,34 +647,55 @@ def aplicar_filtros(programacao, historico):
         programacao = programacao.iloc[0:0]
         historico = historico.iloc[0:0]
 
-    if tipos_selecionados:
-        programacao = programacao[programacao["ABA_ORIGEM"].isin(tipos_selecionados)]
-        historico = historico[historico["TIPO"].isin(tipos_selecionados)]
+    if setores_selecionados:
+        setores_planejamento = [setor for setor in setores_selecionados if SETOR_LABEL_PARA_NORMALIZADO.get(setor) in SETORES_PLANEJAMENTO_NORM]
+        programacao = programacao[programacao["ABA_ORIGEM"].isin(setores_planejamento)]
+        historico = historico[historico["SETOR"].isin(setores_selecionados)]
     else:
         programacao = programacao.iloc[0:0]
         historico = historico.iloc[0:0]
 
-    ordem_selecionada = st.selectbox("Ordem", opcoes_combobox(programacao.get("OP", pd.Series(dtype=str))), key="dashboard_filtro_ordem")
+    ordem_base = pd.concat(
+        [programacao.get("OP", pd.Series(dtype=str)), historico.get("OP", pd.Series(dtype=str))],
+        ignore_index=True,
+    )
+    ordem_selecionada = st.selectbox("Ordem", opcoes_combobox(ordem_base), key="dashboard_filtro_ordem")
     if ordem_selecionada != "Todos":
         programacao = programacao[programacao["OP"].astype(str).str.strip() == ordem_selecionada]
         historico = historico[historico["OP"].astype(str).str.strip() == ordem_selecionada]
 
-    item_selecionado = st.selectbox("Item", opcoes_combobox(programacao.get("PRODUTO", pd.Series(dtype=str))), key="dashboard_filtro_item")
+    item_base = pd.concat(
+        [programacao.get("PRODUTO", pd.Series(dtype=str)), historico.get("PRODUTO", pd.Series(dtype=str))],
+        ignore_index=True,
+    )
+    item_selecionado = st.selectbox("Item", opcoes_combobox(item_base), key="dashboard_filtro_item")
     if item_selecionado != "Todos":
         programacao = programacao[programacao["PRODUTO"].astype(str).str.strip() == item_selecionado]
         historico = historico[historico["PRODUTO"].astype(str).str.strip() == item_selecionado]
 
-    categoria_selecionada = st.selectbox("Categoria", opcoes_combobox(programacao.get("CATEGORIA", pd.Series(dtype=str))), key="dashboard_filtro_categoria")
+    categoria_base = pd.concat(
+        [programacao.get("CATEGORIA", pd.Series(dtype=str)), historico.get("CATEGORIA", pd.Series(dtype=str))],
+        ignore_index=True,
+    )
+    categoria_selecionada = st.selectbox("Categoria", opcoes_combobox(categoria_base), key="dashboard_filtro_categoria")
     if categoria_selecionada != "Todos":
         programacao = programacao[programacao["CATEGORIA"].astype(str).str.strip() == categoria_selecionada]
         historico = historico[historico["CATEGORIA"].astype(str).str.strip() == categoria_selecionada]
 
-    marca_selecionada = st.selectbox("Marca", opcoes_combobox(programacao.get("MARCA", pd.Series(dtype=str))), key="dashboard_filtro_marca")
+    marca_base = pd.concat(
+        [programacao.get("MARCA", pd.Series(dtype=str)), historico.get("MARCA", pd.Series(dtype=str))],
+        ignore_index=True,
+    )
+    marca_selecionada = st.selectbox("Marca", opcoes_combobox(marca_base), key="dashboard_filtro_marca")
     if marca_selecionada != "Todos":
         programacao = programacao[programacao["MARCA"].astype(str).str.strip() == marca_selecionada]
         historico = historico[historico["MARCA"].astype(str).str.strip() == marca_selecionada]
 
-    grupo_selecionado = st.selectbox("Grupo", opcoes_combobox(programacao.get("GRUPO", pd.Series(dtype=str))), key="dashboard_filtro_grupo")
+    grupo_base = pd.concat(
+        [programacao.get("GRUPO", pd.Series(dtype=str)), historico.get("GRUPO", pd.Series(dtype=str))],
+        ignore_index=True,
+    )
+    grupo_selecionado = st.selectbox("Grupo", opcoes_combobox(grupo_base), key="dashboard_filtro_grupo")
     if grupo_selecionado != "Todos":
         programacao = programacao[programacao["GRUPO"].astype(str).str.strip() == grupo_selecionado]
         historico = historico[historico["GRUPO"].astype(str).str.strip() == grupo_selecionado]
@@ -758,6 +798,16 @@ def preparar_historico(historico):
     historico = historico.copy()
     historico["USUARIO_RESPONSAVEL"] = historico["USUARIO_RESPONSAVEL"].replace("", "Sem responsavel")
     historico["TIPO"] = historico["TIPO"].replace("", "Sem tipo")
+    historico["ACAO_BASE"] = historico["ACAO"].map(acao_base_historico)
+    historico["ACAO_ETAPA"] = historico["ACAO"].map(acao_etapa_historico)
+    historico["SETOR"] = historico["ACAO_ETAPA"].map(SETOR_NORMALIZADO_PARA_LABEL).fillna("")
+    historico["SETOR"] = historico["SETOR"].where(
+        historico["SETOR"].astype(str).str.strip().ne(""),
+        historico["TIPO"].where(
+            historico["TIPO"].isin(["Produção", "Manutenção", "Peças"]),
+            "Sem setor",
+        ),
+    )
     return historico
 
 
@@ -767,10 +817,9 @@ def historico_realizado(historico):
     if "ACAO" not in historico.columns:
         return historico
 
-    acao = historico["ACAO"].map(acao_base_historico)
-    produtiva = historico["ACAO"].map(acao_produtiva_historico)
+    acao = historico["ACAO_BASE"] if "ACAO_BASE" in historico.columns else historico["ACAO"].map(acao_base_historico)
     return historico[
-        produtiva
+        acao.isin(["PARCIAL", "FIM"])
         | ((acao == "") & (historico["QUANTIDADE_NUM"] > 0))
     ].copy()
 
@@ -1233,6 +1282,7 @@ def calcular_leadtime(historico, feriados=None):
         "CODIGO",
         "PRODUTO",
         "OP",
+        "SETOR",
         "Leadtime_horas",
         "Leadtime_item_total_horas",
         "Quantidade_movimentada",
@@ -1242,22 +1292,23 @@ def calcular_leadtime(historico, feriados=None):
         return pd.DataFrame(columns=colunas)
 
     dados = historico.copy()
-    dados["ACAO_NORM"] = dados["ACAO"].map(acao_base_historico)
-    dados["ACAO_ETAPA"] = dados["ACAO"].map(acao_etapa_historico)
-    dados["ACAO_PRODUTIVA"] = dados["ACAO"].map(acao_produtiva_historico)
-    etapa_planejamento = dados["ACAO_ETAPA"].isin(["PRODUCAO", "MANUTENCAO", "PECAS"])
+    dados["ACAO_NORM"] = dados["ACAO_BASE"] if "ACAO_BASE" in dados.columns else dados["ACAO"].map(acao_base_historico)
+    dados["ACAO_ETAPA"] = dados["ACAO_ETAPA"] if "ACAO_ETAPA" in dados.columns else dados["ACAO"].map(acao_etapa_historico)
+    if "SETOR" not in dados.columns:
+        dados["SETOR"] = dados["ACAO_ETAPA"].map(SETOR_NORMALIZADO_PARA_LABEL).fillna("")
+    movimento_setor = dados["ACAO_NORM"].isin(["PARCIAL", "FIM"]) & dados["SETOR"].isin(SETORES_DASHBOARD)
     dados = dados[
-        dados["OP"].astype(str).str.strip().ne("")
-        & dados["DATA_HORA_DT"].notna()
+        dados["DATA_HORA_DT"].notna()
+        & dados["SETOR"].isin(SETORES_DASHBOARD)
         & (
-            (dados["ACAO_NORM"].isin(["INICIO", "PAUSA"]) & etapa_planejamento)
-            | dados["ACAO_PRODUTIVA"]
+            dados["ACAO_NORM"].isin(["INICIO", "PAUSA"])
+            | movimento_setor
         )
     ].copy()
     if dados.empty:
         return pd.DataFrame(columns=colunas)
 
-    chaves = ["USUARIO_RESPONSAVEL", "CODIGO", "PRODUTO", "OP"]
+    chaves = ["USUARIO_RESPONSAVEL", "CODIGO", "PRODUTO", "OP", "SETOR"]
     if "TIPO" in dados.columns:
         chaves.append("TIPO")
     inicio = (
@@ -1267,19 +1318,19 @@ def calcular_leadtime(historico, feriados=None):
         .rename("Inicio")
     )
     fim = (
-        dados[(dados["ACAO_NORM"] == "FIM") & dados["ACAO_PRODUTIVA"] & (dados["QUANTIDADE_NUM"] > 0)]
+        dados[(dados["ACAO_NORM"] == "FIM") & (dados["QUANTIDADE_NUM"] > 0)]
         .groupby(chaves, dropna=False)["DATA_HORA_DT"]
         .max()
         .rename("Fim")
     )
     movimento = (
-        dados[dados["ACAO_PRODUTIVA"] & (dados["QUANTIDADE_NUM"] > 0)]
+        dados[dados["ACAO_NORM"].isin(["PARCIAL", "FIM"]) & (dados["QUANTIDADE_NUM"] > 0)]
         .groupby(chaves, dropna=False)["DATA_HORA_DT"]
         .max()
         .rename("Movimento")
     )
     quantidade = (
-        dados[dados["ACAO_PRODUTIVA"] & (dados["QUANTIDADE_NUM"] > 0)]
+        dados[dados["ACAO_NORM"].isin(["PARCIAL", "FIM"]) & (dados["QUANTIDADE_NUM"] > 0)]
         .groupby(chaves, dropna=False)["QUANTIDADE_NUM"]
         .sum()
         .rename("Quantidade_movimentada")
@@ -1298,11 +1349,10 @@ def calcular_leadtime(historico, feriados=None):
             chave = (chave,)
         fim_grupo = grupo[
             (grupo["ACAO_NORM"] == "FIM")
-            & grupo["ACAO_PRODUTIVA"]
             & (grupo["QUANTIDADE_NUM"] > 0)
         ]["DATA_HORA_DT"].max()
         movimento_grupo = grupo[
-            grupo["ACAO_PRODUTIVA"]
+            grupo["ACAO_NORM"].isin(["PARCIAL", "FIM"])
             & (grupo["QUANTIDADE_NUM"] > 0)
         ]["DATA_HORA_DT"].max()
         if pd.notna(fim_grupo):
@@ -1321,7 +1371,7 @@ def calcular_leadtime(historico, feriados=None):
         else linha["Leadtime_item_total_horas"],
         axis=1,
     )
-    return leadtime[colunas]
+    return leadtime[[coluna for coluna in colunas if coluna in leadtime.columns]]
 
 
 def render_leadtime_tabela(titulo, leadtime, coluna_nome, vazio, coluna_tempo="Leadtime_horas", total_por_quantidade=False):
