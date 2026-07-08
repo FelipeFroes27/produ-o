@@ -594,15 +594,14 @@ def modal_pausa_embalagem(item, usuarios):
 @st.dialog("Concluir embalagem", width="large")
 def modal_conclusao(item, usuarios):
     render_detalhes_item(item)
-    if not usuarios:
-        st.error("Nenhum usuario foi encontrado na aba Usuarios.")
+    if not bool(item.get("EM_ANDAMENTO", False)) or bool(item.get("PAUSADA", False)):
+        st.error("Inicie a embalagem antes de concluir.")
         return
 
     ordem = montar_ordem_embalagem(item)
     chave = chave_css_texto(item["COD_PRODUTO"], item["PRODUTO"], "conclusao")
     trava = f"embalagem_trava_{chave}"
     with st.form(f"form_{chave}"):
-        usuario = st.selectbox("Usuario da embalagem", usuarios)
         quantidade = st.number_input(
             "Quantidade embalada",
             min_value=1,
@@ -618,7 +617,7 @@ def modal_conclusao(item, usuarios):
     if confirmar:
         st.session_state[trava] = True
         try:
-            lancar_conclusao_embalagem(ordem, quantidade, usuario=usuario)
+            lancar_conclusao_embalagem(ordem, quantidade)
         except Exception as exc:
             st.session_state.pop(trava, None)
             st.error(str(exc))

@@ -668,17 +668,15 @@ def modal_pausa_qualidade(ordem, avaliadores):
 
 
 @st.dialog("Aprovar qualidade", width="large")
-def modal_aprovacao(ordem, avaliadores, usuario_padrao=""):
+def modal_aprovacao(ordem):
     render_detalhes_ordem(ordem)
-    if not avaliadores:
-        st.error("Nenhum usuario com cargo Qualidade foi encontrado.")
+    if not bool(ordem.get("EM_ANDAMENTO", False)) or bool(ordem.get("PAUSADA", False)):
+        st.error("Inicie a qualidade antes de aprovar.")
         return
 
     chave = f"{ordem['ABA_ORIGEM']}_{ordem['OP']}_{ordem['COD_PRODUTO']}_aprovacao"
     trava = f"qualidade_trava_{chave}"
     with st.form(f"form_{chave}"):
-        indice_usuario = avaliadores.index(usuario_padrao) if usuario_padrao in avaliadores else 0
-        usuario = st.selectbox("Usuario da qualidade", avaliadores, index=indice_usuario)
         quantidade = st.number_input(
             "Quantidade aprovada",
             min_value=1,
@@ -700,7 +698,7 @@ def modal_aprovacao(ordem, avaliadores, usuario_padrao=""):
     if confirmar:
         st.session_state[trava] = True
         try:
-            lancar_aprovacao_qualidade(ordem, quantidade, usuario, embalagem=enviar_embalagem)
+            lancar_aprovacao_qualidade(ordem, quantidade, embalagem=enviar_embalagem)
         except Exception as exc:
             st.session_state.pop(trava, None)
             st.error(str(exc))
@@ -711,10 +709,10 @@ def modal_aprovacao(ordem, avaliadores, usuario_padrao=""):
 
 
 @st.dialog("Reprovar qualidade", width="large")
-def modal_reprovacao(ordem, avaliadores, usuario_padrao=""):
+def modal_reprovacao(ordem):
     render_detalhes_ordem(ordem)
-    if not avaliadores:
-        st.error("Nenhum usuario com cargo Qualidade foi encontrado.")
+    if not bool(ordem.get("EM_ANDAMENTO", False)) or bool(ordem.get("PAUSADA", False)):
+        st.error("Inicie a qualidade antes de reprovar.")
         return
     if not bool(ordem.get("TEM_ORDEM", False)):
         st.error("Nao foi possivel localizar a linha da ordem na programacao atual para subtrair o realizado.")
@@ -728,8 +726,6 @@ def modal_reprovacao(ordem, avaliadores, usuario_padrao=""):
     chave = f"{ordem['ABA_ORIGEM']}_{ordem['OP']}_{ordem['COD_PRODUTO']}_reprovacao"
     trava = f"qualidade_trava_{chave}"
     with st.form(f"form_{chave}"):
-        indice_usuario = avaliadores.index(usuario_padrao) if usuario_padrao in avaliadores else 0
-        usuario = st.selectbox("Usuario da qualidade", avaliadores, index=indice_usuario)
         quantidade = st.number_input(
             "Quantidade reprovada",
             min_value=1,
@@ -746,7 +742,7 @@ def modal_reprovacao(ordem, avaliadores, usuario_padrao=""):
     if confirmar:
         st.session_state[trava] = True
         try:
-            lancar_reprovacao_qualidade(ordem, quantidade, usuario)
+            lancar_reprovacao_qualidade(ordem, quantidade)
         except Exception as exc:
             st.session_state.pop(trava, None)
             st.error(str(exc))
@@ -817,7 +813,7 @@ def render_card_qualidade(linha, avaliadores):
                 aplicar_icone_botao(key, ICONES_BOTOES["aprovacao"])
                 desabilitado = pausada or not em_andamento
                 if st.button("Aprovar", key=key, help="Aprovar quantidade na qualidade", disabled=desabilitado):
-                    modal_aprovacao(linha, avaliadores)
+                    modal_aprovacao(linha)
             with acao_4:
                 key = f"consulta_{chave_css}"
                 aplicar_icone_botao(key, ICONES_BOTOES["consulta"])
@@ -828,7 +824,7 @@ def render_card_qualidade(linha, avaliadores):
                 aplicar_icone_botao(key, ICONES_BOTOES["reprovacao"])
                 desabilitado = pausada or not em_andamento
                 if st.button("Reprovar", key=key, help="Reprovar quantidade na qualidade", disabled=desabilitado):
-                    modal_reprovacao(linha, avaliadores)
+                    modal_reprovacao(linha)
 
 
 def chave_fluxo(df):

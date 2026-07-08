@@ -651,7 +651,6 @@ def programacao_fluxo_historico(historico):
     programado = (
         entradas.groupby(chaves_ordem, dropna=False)
         .agg(
-            USUARIO_RESPONSAVEL=("USUARIO_RESPONSAVEL", "first"),
             DATA_PRIORIDADE=("DATA", "min"),
             QUANTIDADE_NUM=("QUANTIDADE_NUM", "sum"),
         )
@@ -672,11 +671,99 @@ def programacao_fluxo_historico(historico):
     fluxo["STATUS"] = fluxo["SALDO_NUM"].apply(lambda saldo: "OK" if saldo <= 0 else "PENDENTE")
     fluxo["ATRASADA"] = False
     fluxo = fluxo.rename(columns={"CODIGO": "COD_PRODUTO", "SETOR": "ABA_ORIGEM"})
+    fluxo["USUARIO_RESPONSAVEL"] = fluxo["ABA_ORIGEM"]
 
     for coluna in colunas:
         if coluna not in fluxo.columns:
             fluxo[coluna] = ""
     return fluxo[colunas]
+
+
+def responsavel_comparativo_historico(historico):
+    if historico.empty:
+        return historico
+
+    dados = historico.copy()
+    if "SETOR" not in dados.columns:
+        dados["SETOR"] = dados["ACAO"].map(acao_etapa_historico).map(SETOR_NORMALIZADO_PARA_LABEL).fillna("")
+    setores_fluxo = dados["SETOR"].isin(["Qualidade", "Embalagem"])
+    dados["RESPONSAVEL_COMPARATIVO"] = dados["USUARIO_RESPONSAVEL"]
+    dados.loc[setores_fluxo, "RESPONSAVEL_COMPARATIVO"] = dados.loc[setores_fluxo, "SETOR"]
+    return dados
+
+
+def comparativo_execucao_fluxo_usuario(historico):
+    colunas = ["USUARIO_RESPONSAVEL", "Programado", "Realizado", "Pendente"]
+    if historico.empty:
+        return pd.DataFrame(columns=colunas)
+
+    dados = historico.copy()
+    if "ACAO_BASE" not in dados.columns:
+        dados["ACAO_BASE"] = dados["ACAO"].map(acao_base_historico)
+    if "SETOR" not in dados.columns:
+        dados["SETOR"] = dados["ACAO"].map(acao_etapa_historico).map(SETOR_NORMALIZADO_PARA_LABEL).fillna("")
+
+    dados = dados[
+        dados["SETOR"].isin(["Qualidade", "Embalagem"])
+        & dados["ACAO_BASE"].isin(ACOES_MOVIMENTO_DASHBOARD)
+        & (dados["QUANTIDADE_NUM"] > 0)
+    ].copy()
+    if dados.empty:
+        return pd.DataFrame(columns=colunas)
+
+    execucao = (
+        dados.groupby("USUARIO_RESPONSAVEL", as_index=False)
+        .agg(Realizado=("QUANTIDADE_NUM", "sum"))
+    )
+    execucao["Programado"] = execucao["Realizado"]
+    execucao["Pendente"] = 0
+    return execucao[colunas]
+
+
+def ordens_por_usuario_dashboard(programacao, historico):
+    colunas = ["USUARIO_RESPONSAVEL", "Ordens"]
+    partes = []
+
+    if not programacao.empty:
+        planejamento = programacao[
+            ~programacao["ABA_ORIGEM"].isin(["Qualidade", "Embalagem"])
+        ].copy()
+        if not planejamento.empty:
+            partes.append(
+                planejamento.groupby("USUARIO_RESPONSAVEL", as_index=False)
+                .agg(Ordens=("OP", "count"))
+            )
+
+    if not historico.empty:
+        dados = historico.copy()
+        if "ACAO_BASE" not in dados.columns:
+            dados["ACAO_BASE"] = dados["ACAO"].map(acao_base_historico)
+        if "SETOR" not in dados.columns:
+            dados["SETOR"] = dados["ACAO"].map(acao_etapa_historico).map(SETOR_NORMALIZADO_PARA_LABEL).fillna("")
+
+        fluxo = dados[
+            dados["SETOR"].isin(["Qualidade", "Embalagem"])
+            & dados["ACAO_BASE"].isin(ACOES_MOVIMENTO_DASHBOARD)
+            & (dados["QUANTIDADE_NUM"] > 0)
+        ].copy()
+        if not fluxo.empty:
+            fluxo = fluxo.drop_duplicates(
+                subset=["USUARIO_RESPONSAVEL", "SETOR", "OP", "CODIGO", "PRODUTO"]
+            )
+            partes.append(
+                fluxo.groupby("USUARIO_RESPONSAVEL", as_index=False)
+                .agg(Ordens=("OP", "count"))
+            )
+
+    if not partes:
+        return pd.DataFrame(columns=colunas)
+
+    return (
+        pd.concat(partes, ignore_index=True, sort=False)
+        .groupby("USUARIO_RESPONSAVEL", as_index=False)
+        .agg(Ordens=("Ordens", "sum"))
+        .sort_values("Ordens", ascending=False)
+    )
 
 
 def opcoes_combobox(serie):
@@ -1695,14 +1782,10 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
 
     cards = []
 
-    if programacao.empty:
+    ordens_usuario = ordens_por_usuario_dashboard(programacao, historico)
+    if ordens_usuario.empty:
         cards.append(montar_chart_html("Ordens por usuario"))
     else:
-        ordens_usuario = (
-            programacao.groupby("USUARIO_RESPONSAVEL", as_index=False)
-            .agg(Ordens=("OP", "count"))
-            .sort_values("Ordens", ascending=False)
-        )
         ordens_usuario["Rotulo"] = ordens_usuario["Ordens"].map(formatar_numero)
         fig = px.bar(
             ordens_usuario,
@@ -1740,13 +1823,22 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
         if not programacao.empty
         else pd.DataFrame(columns=["USUARIO_RESPONSAVEL", "Programado", "Pendente"])
     )
+    historico_comparativo = responsavel_comparativo_historico(historico)
     comparativo_realizado = (
-        historico.groupby("USUARIO_RESPONSAVEL", as_index=False)
+        historico_comparativo.groupby("RESPONSAVEL_COMPARATIVO", as_index=False)
         .agg(Realizado=("QUANTIDADE_NUM", "sum"))
-        if not historico.empty
+        .rename(columns={"RESPONSAVEL_COMPARATIVO": "USUARIO_RESPONSAVEL"})
+        if not historico_comparativo.empty
         else pd.DataFrame(columns=["USUARIO_RESPONSAVEL", "Realizado"])
     )
     comparativo = comparativo_programado.merge(comparativo_realizado, on="USUARIO_RESPONSAVEL", how="outer").fillna(0)
+    comparativo_execucao = comparativo_execucao_fluxo_usuario(historico)
+    if not comparativo_execucao.empty:
+        comparativo = pd.concat([comparativo, comparativo_execucao], ignore_index=True, sort=False)
+        comparativo = (
+            comparativo.groupby("USUARIO_RESPONSAVEL", as_index=False)
+            .agg(Programado=("Programado", "sum"), Realizado=("Realizado", "sum"), Pendente=("Pendente", "sum"))
+        )
 
     if comparativo.empty:
         cards.append(montar_chart_html("Programado x realizado"))

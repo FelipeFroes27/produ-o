@@ -454,10 +454,20 @@ def lancar_pausa_embalagem(ordem, usuario=""):
 
 
 def lancar_conclusao_embalagem(ordem, quantidade, usuario=""):
-    lancar_movimento_setor(ordem, quantidade, "Embalagem", usuario=usuario)
+    usuario_inicio = ultimo_inicio_ativo_setor_ordem(ordem, "Embalagem")
+    if not usuario_inicio:
+        raise ValueError("Nao foi possivel identificar o usuario que iniciou a embalagem. Inicie a etapa novamente.")
+    lancar_movimento_setor(ordem, quantidade, "Embalagem", usuario=usuario_inicio)
+    registrar_historico(
+        ordem,
+        0,
+        acao_descritiva("Fim", "Embalagem"),
+        avaliador=usuario_inicio,
+        usuario_responsavel=usuario_inicio,
+    )
 
 
-def lancar_aprovacao_qualidade(ordem, quantidade_aprovada, avaliador, embalagem=False):
+def lancar_aprovacao_qualidade(ordem, quantidade_aprovada, avaliador="", embalagem=False):
     quantidade_aprovada = float(quantidade_aprovada)
     if quantidade_aprovada <= 0:
         raise ValueError("Informe uma quantidade maior que zero.")
@@ -467,6 +477,9 @@ def lancar_aprovacao_qualidade(ordem, quantidade_aprovada, avaliador, embalagem=
         if ultima_acao == "PAUSA":
             raise ValueError("Retome a etapa de qualidade antes de aprovar.")
         raise ValueError("Inicie a etapa de qualidade antes de aprovar.")
+    usuario_inicio = ultimo_inicio_ativo_setor_ordem(ordem, "Qualidade")
+    if not usuario_inicio:
+        raise ValueError("Nao foi possivel identificar o usuario que iniciou a qualidade. Inicie a etapa novamente.")
 
     pendente = float(ordem.get("QUANTIDADE_PENDENTE", 0) or 0)
     if quantidade_aprovada > pendente:
@@ -476,35 +489,43 @@ def lancar_aprovacao_qualidade(ordem, quantidade_aprovada, avaliador, embalagem=
         ordem,
         quantidade_aprovada,
         acao_descritiva("Aprovado", "Qualidade"),
-        avaliador=avaliador,
-        usuario_responsavel=avaliador,
+        avaliador=usuario_inicio,
+        usuario_responsavel=usuario_inicio,
     )
-    if quantidade_aprovada >= pendente:
-        registrar_historico(
-            ordem,
-            0,
-            acao_descritiva("Fim", "Qualidade"),
-            avaliador=avaliador,
-            usuario_responsavel=avaliador,
-        )
+    registrar_historico(
+        ordem,
+        0,
+        acao_descritiva("Fim", "Qualidade"),
+        avaliador=usuario_inicio,
+        usuario_responsavel=usuario_inicio,
+    )
     if embalagem:
         registrar_historico(
             ordem,
             quantidade_aprovada,
             acao_descritiva("Entrada", "Embalagem"),
-            avaliador=avaliador,
-            usuario_responsavel=avaliador,
+            avaliador=usuario_inicio,
+            usuario_responsavel=usuario_inicio,
         )
     carregar_historico.clear()
 
 
-def lancar_reprovacao_qualidade(ordem, quantidade_reprovada, avaliador):
+def lancar_reprovacao_qualidade(ordem, quantidade_reprovada, avaliador=""):
     aba_origem = str(ordem["ABA_ORIGEM"])
     linha_planilha = int(ordem["LINHA_PLANILHA"])
     quantidade_reprovada = float(quantidade_reprovada)
 
     if quantidade_reprovada <= 0:
         raise ValueError("Informe uma quantidade maior que zero.")
+
+    ultima_acao = ultima_acao_setor_ordem(ordem, "Qualidade")
+    if ultima_acao != "INICIO":
+        if ultima_acao == "PAUSA":
+            raise ValueError("Retome a etapa de qualidade antes de reprovar.")
+        raise ValueError("Inicie a etapa de qualidade antes de reprovar.")
+    usuario_inicio = ultimo_inicio_ativo_setor_ordem(ordem, "Qualidade")
+    if not usuario_inicio:
+        raise ValueError("Nao foi possivel identificar o usuario que iniciou a qualidade. Inicie a etapa novamente.")
 
     worksheet = abrir_planilha().worksheet(aba_origem)
     headers = worksheet.row_values(1)
@@ -522,18 +543,16 @@ def lancar_reprovacao_qualidade(ordem, quantidade_reprovada, avaliador):
             ordem,
             quantidade_reprovada,
             acao_descritiva("Reprovado", "Qualidade"),
-            avaliador=avaliador,
-            usuario_responsavel=avaliador,
+            avaliador=usuario_inicio,
+            usuario_responsavel=usuario_inicio,
         )
-        pendente_qualidade = float(ordem.get("QUANTIDADE_PENDENTE", 0) or 0)
-        if quantidade_reprovada >= pendente_qualidade:
-            registrar_historico(
-                ordem,
-                0,
-                acao_descritiva("Fim", "Qualidade"),
-                avaliador=avaliador,
-                usuario_responsavel=avaliador,
-            )
+        registrar_historico(
+            ordem,
+            0,
+            acao_descritiva("Fim", "Qualidade"),
+            avaliador=usuario_inicio,
+            usuario_responsavel=usuario_inicio,
+        )
     except Exception as exc:
         try:
             worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(realizado_atual))
@@ -738,6 +757,58 @@ def ultima_acao_setor_ordem(ordem, setor):
         ultima_acao = acao_base
 
     return ultima_acao
+
+
+def ultimo_inicio_ativo_setor_ordem(ordem, setor):
+    worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
+    values = worksheet.get_all_values()
+    if len(values) < 2:
+        return ""
+
+    headers = [str(coluna).strip() for coluna in values[0]]
+    col_usuario = _indice_coluna_opcional(headers, ["USU\u00c1RIO RESPONSAVEL", "USUARIO RESPONSAVEL"])
+    col_op = _indice_coluna_opcional(headers, ["N\u00b0 DA OP", "N DA OP", "OP"])
+    col_codigo = _indice_coluna_opcional(headers, ["CODIGO"])
+    col_produto = _indice_coluna_opcional(headers, ["PRODUTO"])
+    col_tipo = _indice_coluna_opcional(headers, ["TIPO"])
+    col_acao = _indice_coluna_opcional(headers, ["A\u00c7\u00c3O", "ACAO"])
+
+    if not all([col_usuario, col_op, col_codigo, col_produto, col_tipo, col_acao]):
+        return ""
+
+    def valor_linha(row, coluna):
+        indice = coluna - 1
+        return str(row[indice]).strip() if indice < len(row) else ""
+
+    chave_ordem = {
+        "op": _normalizar(ordem.get("OP", "")),
+        "codigo": _normalizar(ordem.get("COD_PRODUTO", "")),
+        "produto": _normalizar(ordem.get("PRODUTO", "")),
+        "tipo": _normalizar(ordem.get("ABA_ORIGEM", "")),
+    }
+
+    setor_norm = _normalizar(setor)
+    usuario_inicio = ""
+    ultima_acao = ""
+    for row in values[1:]:
+        acao = valor_linha(row, col_acao)
+        acao_base = acao_base_historico(acao)
+        acao_etapa = acao_etapa_historico(acao)
+        if acao_base not in ["INICIO", "PAUSA", "FIM"] or acao_etapa != setor_norm:
+            continue
+
+        if (
+            _normalizar(valor_linha(row, col_op)) != chave_ordem["op"]
+            or _normalizar(valor_linha(row, col_codigo)) != chave_ordem["codigo"]
+            or _normalizar(valor_linha(row, col_produto)) != chave_ordem["produto"]
+            or _normalizar(valor_linha(row, col_tipo)) != chave_ordem["tipo"]
+        ):
+            continue
+
+        ultima_acao = acao_base
+        usuario_inicio = valor_linha(row, col_usuario) if acao_base == "INICIO" else ""
+
+    return usuario_inicio if ultima_acao == "INICIO" else ""
 
 
 def ultima_acao_embalagem_ordem(ordem):
