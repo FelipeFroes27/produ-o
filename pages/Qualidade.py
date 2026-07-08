@@ -908,12 +908,26 @@ def render_puxar_ordem_qualidade(ordens, historico):
     if opcoes.empty:
         return
     with st.expander("Puxar ordem para qualidade"):
+        rotulos = opcoes["ROTULO_QUALIDADE"].tolist()
+        selecionado = st.selectbox("Ordem", rotulos, key="puxar_qualidade_ordem")
+        ordem = opcoes[opcoes["ROTULO_QUALIDADE"] == selecionado].iloc[0]
+        quantidade_key = "puxar_qualidade_quantidade_" + chave_css_texto(
+            ordem["ABA_ORIGEM"],
+            ordem["OP"],
+            ordem["COD_PRODUTO"],
+            ordem["PRODUTO"],
+            ordem["USUARIO_RESPONSAVEL"],
+        )
         with st.form("form_puxar_qualidade"):
-            rotulos = opcoes["ROTULO_QUALIDADE"].tolist()
-            selecionado = st.selectbox("Ordem", rotulos)
-            ordem = opcoes[opcoes["ROTULO_QUALIDADE"] == selecionado].iloc[0]
             maximo = max(1, inteiro(ordem["QUANTIDADE_DISPONIVEL"]))
-            quantidade = st.number_input("Quantidade", min_value=1, max_value=maximo, value=maximo, step=1)
+            quantidade = st.number_input(
+                "Quantidade",
+                min_value=1,
+                max_value=maximo,
+                value=maximo,
+                step=1,
+                key=quantidade_key,
+            )
             confirmar = st.form_submit_button("Enviar para qualidade", use_container_width=True)
         if confirmar:
             try:
