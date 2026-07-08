@@ -848,7 +848,69 @@ def registrar_historico(ordem, quantidade_lancada, acao, avaliador="", usuario_r
             linha.append("")
 
     worksheet.append_row(linha, value_input_option="RAW")
+    organizar_historico()
     carregar_historico.clear()
+
+
+def organizar_historico():
+    worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
+    values = worksheet.get_all_values()
+    if len(values) < 3:
+        return
+
+    headers = [str(coluna).strip() for coluna in values[0]]
+    col_op = _indice_coluna_opcional(headers, ["N\u00b0 DA OP", "N DA OP", "OP"])
+    col_data = _indice_coluna_opcional(headers, ["DATA / HORA", "DATA HORA"])
+    col_codigo = _indice_coluna_opcional(headers, ["CODIGO"])
+    col_produto = _indice_coluna_opcional(headers, ["PRODUTO"])
+    col_tipo = _indice_coluna_opcional(headers, ["TIPO"])
+    if not all([col_op, col_data, col_codigo, col_produto, col_tipo]):
+        return
+
+    def valor_linha(row, coluna):
+        indice = coluna - 1
+        return str(row[indice]).strip() if indice < len(row) else ""
+
+    linhas = []
+    largura = len(headers)
+    for posicao, row in enumerate(values[1:]):
+        row = [str(valor).strip() for valor in row]
+        if not any(row):
+            continue
+        row = row[:largura] + [""] * max(0, largura - len(row))
+        data_hora = pd.to_datetime(valor_linha(row, col_data), dayfirst=True, errors="coerce")
+        if pd.isna(data_hora):
+            data_hora = pd.Timestamp.max
+        linhas.append(
+            {
+                "row": row,
+                "tipo": _normalizar(valor_linha(row, col_tipo)),
+                "op": _normalizar(valor_linha(row, col_op)),
+                "codigo": _normalizar(valor_linha(row, col_codigo)),
+                "produto": _normalizar(valor_linha(row, col_produto)),
+                "data_hora": data_hora,
+                "posicao": posicao,
+            }
+        )
+
+    if not linhas:
+        worksheet.batch_clear(["A2:ZZ"])
+        return
+
+    linhas_ordenadas = sorted(
+        linhas,
+        key=lambda item: (
+            item["tipo"],
+            item["op"],
+            item["codigo"],
+            item["produto"],
+            item["data_hora"],
+            item["posicao"],
+        ),
+    )
+    valores_ordenados = [item["row"] for item in linhas_ordenadas]
+    worksheet.batch_clear(["A2:ZZ"])
+    worksheet.update("A2", valores_ordenados, value_input_option="RAW")
 
 
 def _limpar_dataframe(df):
