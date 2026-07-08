@@ -702,7 +702,7 @@ def opcoes_encaminhamento(ordens, historico):
     dados["ACAO_ETAPA"] = dados["ACAO"].map(acao_etapa_historico)
     dados["QUANTIDADE_NUM"] = pd.to_numeric(dados["QUANTIDADE_NUM"], errors="coerce").fillna(0)
     dados = dados.rename(columns={"CODIGO": "COD_PRODUTO", "TIPO": "ABA_ORIGEM"})
-    chaves = ["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO", "USUARIO_RESPONSAVEL"]
+    chaves = ["COD_PRODUTO", "PRODUTO"]
 
     aprovadas = (
         dados[
@@ -738,21 +738,11 @@ def opcoes_encaminhamento(ordens, historico):
     if base.empty:
         return base
 
-    ordens_base = ordens.copy()
-    ordens_base["CHAVE_FLUXO"] = chave_fluxo(ordens_base)
-    base["CHAVE_FLUXO"] = chave_fluxo(base)
-    base = base.merge(
-        ordens_base.drop_duplicates("CHAVE_FLUXO", keep="first"),
-        on="CHAVE_FLUXO",
-        how="left",
-        suffixes=("", "_ORDEM"),
-    )
-    for coluna in chaves:
-        coluna_ordem = f"{coluna}_ORDEM"
-        if coluna_ordem in base.columns:
-            base[coluna] = base[coluna_ordem].where(base[coluna_ordem].fillna("").astype(str).str.strip().ne(""), base[coluna])
+    base["ABA_ORIGEM"] = "Embalagem"
+    base["OP"] = ""
+    base["USUARIO_RESPONSAVEL"] = ""
     base["ROTULO_EMBALAGEM"] = base.apply(
-        lambda linha: f"{linha['ABA_ORIGEM']} | OP {linha['OP']} | {linha['COD_PRODUTO']} | {str(linha['PRODUTO'])[:80]}",
+        lambda linha: f"{linha['COD_PRODUTO']} | {str(linha['PRODUTO'])[:100]}",
         axis=1,
     )
     return base.sort_values(["COD_PRODUTO", "PRODUTO"])
