@@ -371,7 +371,7 @@ def lancar_encaminhamento_embalagem(ordem, quantidade):
     quantidade = float(quantidade)
     if quantidade <= 0:
         raise ValueError("Informe uma quantidade maior que zero.")
-    registrar_historico(_ordem_historico_embalagem(ordem), quantidade, acao_descritiva("Entrada", "Embalagem"))
+    registrar_historico(ordem, quantidade, acao_descritiva("Entrada", "Embalagem"))
     carregar_historico.clear()
 
 
@@ -514,7 +514,7 @@ def lancar_aprovacao_qualidade(ordem, quantidade_aprovada, avaliador="", embalag
     )
     if embalagem:
         registrar_historico(
-            _ordem_historico_embalagem(ordem),
+            ordem,
             quantidade_aprovada,
             acao_descritiva("Entrada", "Embalagem"),
             avaliador=usuario_inicio,
@@ -869,13 +869,6 @@ def registrar_historico(ordem, quantidade_lancada, acao, avaliador="", usuario_r
     if organizar:
         organizar_historico()
     carregar_historico.clear()
-
-
-def _ordem_historico_embalagem(ordem):
-    ordem_embalagem = dict(ordem)
-    ordem_embalagem["OP"] = ""
-    ordem_embalagem["ABA_ORIGEM"] = "Embalagem"
-    return ordem_embalagem
 
 
 def organizar_historico():
