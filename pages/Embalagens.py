@@ -470,7 +470,7 @@ def montar_fila_embalagem(historico):
     if not controles.empty:
         controles["CHAVE_PRODUTO"] = chave_produto(controles)
         ultima = (
-            controles.sort_values("DATA_HORA_DT")
+            controles.sort_values("DATA_HORA_DT", kind="mergesort")
             .groupby("CHAVE_PRODUTO", dropna=False)["ACAO_NORM"]
             .last()
             .to_dict()

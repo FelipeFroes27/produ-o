@@ -423,7 +423,7 @@ def montar_fila_qualidade(historico, ordens):
     dados["ACAO_NORM"] = dados["ACAO"].map(acao_base_historico)
     dados["ACAO_ETAPA"] = dados["ACAO"].map(acao_etapa_historico)
     dados["QUANTIDADE_NUM"] = pd.to_numeric(dados["QUANTIDADE_NUM"], errors="coerce").fillna(0)
-    chaves_historico = ["USUARIO_RESPONSAVEL", "OP", "CODIGO", "PRODUTO", "TIPO"]
+    chaves_historico = ["OP", "CODIGO", "PRODUTO", "TIPO"]
 
     solicitacoes = (
         dados[
@@ -433,6 +433,7 @@ def montar_fila_qualidade(historico, ordens):
         ]
         .groupby(chaves_historico, dropna=False)
         .agg(
+            USUARIO_RESPONSAVEL=("USUARIO_RESPONSAVEL", "first"),
             QUANTIDADE_SOLICITADA=("QUANTIDADE_NUM", "sum"),
             DATA_HORA_DT=("DATA_HORA_DT", "max"),
         )
@@ -463,14 +464,14 @@ def montar_fila_qualidade(historico, ordens):
     fila = fila.rename(columns={"CODIGO": "COD_PRODUTO", "TIPO": "ABA_ORIGEM"})
     fila["CHAVE_QUALIDADE"] = chave_qualidade(
         fila,
-        ["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO", "USUARIO_RESPONSAVEL"],
+        ["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO"],
     )
 
     ordens_base = ordens.copy()
     if not ordens_base.empty:
         ordens_base["CHAVE_QUALIDADE"] = chave_qualidade(
             ordens_base,
-            ["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO", "USUARIO_RESPONSAVEL"],
+            ["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO"],
         )
         ordens_base = ordens_base.drop_duplicates("CHAVE_QUALIDADE", keep="first")
         extras = [
@@ -500,10 +501,10 @@ def montar_fila_qualidade(historico, ordens):
         controles = controles.rename(columns={"CODIGO": "COD_PRODUTO", "TIPO": "ABA_ORIGEM"})
         controles["CHAVE_QUALIDADE"] = chave_qualidade(
             controles,
-            ["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO", "USUARIO_RESPONSAVEL"],
+            ["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO"],
         )
         ultima = (
-            controles.sort_values("DATA_HORA_DT")
+            controles.sort_values("DATA_HORA_DT", kind="mergesort")
             .groupby("CHAVE_QUALIDADE", dropna=False)["ACAO_NORM"]
             .last()
             .to_dict()

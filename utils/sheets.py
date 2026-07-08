@@ -339,9 +339,15 @@ def lancar_realizacao(ordem, quantidade_lancada, qualidade=False):
 
     worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(novo_realizado))
     try:
-        registrar_historico(ordem, quantidade_lancada, acao)
+        registrar_historico(ordem, quantidade_lancada, acao, organizar=False)
         if qualidade:
-            registrar_historico(ordem, quantidade_lancada, acao_descritiva("Entrada", "Qualidade"))
+            registrar_historico(
+                ordem,
+                quantidade_lancada,
+                acao_descritiva("Entrada", "Qualidade"),
+                organizar=False,
+            )
+        organizar_historico()
     except Exception as exc:
         try:
             worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(realizado_atual))
@@ -417,7 +423,7 @@ def lancar_pausa_setor(ordem, setor, usuario=""):
     carregar_historico.clear()
 
 
-def lancar_movimento_setor(ordem, quantidade, setor, usuario="", campo_pendente="QUANTIDADE_PENDENTE"):
+def lancar_movimento_setor(ordem, quantidade, setor, usuario="", campo_pendente="QUANTIDADE_PENDENTE", organizar=True):
     quantidade = float(quantidade)
     if quantidade <= 0:
         raise ValueError("Informe uma quantidade maior que zero.")
@@ -433,7 +439,7 @@ def lancar_movimento_setor(ordem, quantidade, setor, usuario="", campo_pendente=
         raise ValueError(f"A quantidade passa do pendente de {str(setor).lower()} ({_formatar_numero(pendente)}).")
 
     acao = acao_descritiva("Fim" if quantidade >= pendente else "Parcial", setor)
-    registrar_historico(ordem, quantidade, acao, avaliador=usuario, usuario_responsavel=usuario)
+    registrar_historico(ordem, quantidade, acao, avaliador=usuario, usuario_responsavel=usuario, organizar=organizar)
     carregar_historico.clear()
 
 
@@ -454,17 +460,22 @@ def lancar_pausa_embalagem(ordem, usuario=""):
 
 
 def lancar_conclusao_embalagem(ordem, quantidade, usuario=""):
+    quantidade = float(quantidade)
     usuario_inicio = ultimo_inicio_ativo_setor_ordem(ordem, "Embalagem")
     if not usuario_inicio:
         raise ValueError("Nao foi possivel identificar o usuario que iniciou a embalagem. Inicie a etapa novamente.")
-    lancar_movimento_setor(ordem, quantidade, "Embalagem", usuario=usuario_inicio)
-    registrar_historico(
-        ordem,
-        0,
-        acao_descritiva("Fim", "Embalagem"),
-        avaliador=usuario_inicio,
-        usuario_responsavel=usuario_inicio,
-    )
+    pendente = float(ordem.get("QUANTIDADE_PENDENTE", 0) or 0)
+    lancar_movimento_setor(ordem, quantidade, "Embalagem", usuario=usuario_inicio, organizar=False)
+    if quantidade < pendente:
+        registrar_historico(
+            ordem,
+            0,
+            acao_descritiva("Fim", "Embalagem"),
+            avaliador=usuario_inicio,
+            usuario_responsavel=usuario_inicio,
+            organizar=False,
+        )
+    organizar_historico()
 
 
 def lancar_aprovacao_qualidade(ordem, quantidade_aprovada, avaliador="", embalagem=False):
@@ -491,6 +502,7 @@ def lancar_aprovacao_qualidade(ordem, quantidade_aprovada, avaliador="", embalag
         acao_descritiva("Aprovado", "Qualidade"),
         avaliador=usuario_inicio,
         usuario_responsavel=usuario_inicio,
+        organizar=False,
     )
     registrar_historico(
         ordem,
@@ -498,6 +510,7 @@ def lancar_aprovacao_qualidade(ordem, quantidade_aprovada, avaliador="", embalag
         acao_descritiva("Fim", "Qualidade"),
         avaliador=usuario_inicio,
         usuario_responsavel=usuario_inicio,
+        organizar=False,
     )
     if embalagem:
         registrar_historico(
@@ -506,7 +519,9 @@ def lancar_aprovacao_qualidade(ordem, quantidade_aprovada, avaliador="", embalag
             acao_descritiva("Entrada", "Embalagem"),
             avaliador=usuario_inicio,
             usuario_responsavel=usuario_inicio,
+            organizar=False,
         )
+    organizar_historico()
     carregar_historico.clear()
 
 
@@ -545,6 +560,7 @@ def lancar_reprovacao_qualidade(ordem, quantidade_reprovada, avaliador=""):
             acao_descritiva("Reprovado", "Qualidade"),
             avaliador=usuario_inicio,
             usuario_responsavel=usuario_inicio,
+            organizar=False,
         )
         registrar_historico(
             ordem,
@@ -552,7 +568,9 @@ def lancar_reprovacao_qualidade(ordem, quantidade_reprovada, avaliador=""):
             acao_descritiva("Fim", "Qualidade"),
             avaliador=usuario_inicio,
             usuario_responsavel=usuario_inicio,
+            organizar=False,
         )
+        organizar_historico()
     except Exception as exc:
         try:
             worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(realizado_atual))
@@ -816,7 +834,7 @@ def ultima_acao_embalagem_ordem(ordem):
     return f"{ultima_acao} EMBALAGEM" if ultima_acao else ""
 
 
-def registrar_historico(ordem, quantidade_lancada, acao, avaliador="", usuario_responsavel=""):
+def registrar_historico(ordem, quantidade_lancada, acao, avaliador="", usuario_responsavel="", organizar=True):
     worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
     headers = worksheet.row_values(1)
     data_hora = datetime.now(FUSO_BRASILIA).strftime("%d/%m/%Y %H:%M:%S")
@@ -848,7 +866,8 @@ def registrar_historico(ordem, quantidade_lancada, acao, avaliador="", usuario_r
             linha.append("")
 
     worksheet.append_row(linha, value_input_option="RAW")
-    organizar_historico()
+    if organizar:
+        organizar_historico()
     carregar_historico.clear()
 
 

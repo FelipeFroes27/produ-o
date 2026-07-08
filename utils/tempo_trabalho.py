@@ -74,7 +74,7 @@ def intervalos_ativos_por_lancamentos(lancamentos, fim=None):
     if "ACAO_NORM" not in dados.columns:
         dados["ACAO_NORM"] = dados["ACAO"].fillna("").astype(str).str.strip().str.upper()
     dados["DATA_HORA_DT"] = pd.to_datetime(dados["DATA_HORA_DT"], errors="coerce")
-    dados = dados[dados["DATA_HORA_DT"].notna()].sort_values("DATA_HORA_DT")
+    dados = dados[dados["DATA_HORA_DT"].notna()].sort_values("DATA_HORA_DT", kind="mergesort")
 
     fim = pd.to_datetime(fim, errors="coerce") if fim is not None else pd.NaT
     if pd.notna(fim):

@@ -632,40 +632,74 @@ def programacao_fluxo_historico(historico):
     if "SETOR" not in dados.columns:
         dados["SETOR"] = dados["ACAO_ETAPA"].map(SETOR_NORMALIZADO_PARA_LABEL).fillna("")
 
-    setores_fluxo = ["Qualidade", "Embalagem"]
-    chaves_ordem = ["OP", "CODIGO", "PRODUTO", "SETOR"]
-    entradas = dados[
+    partes = []
+
+    entradas_qualidade = dados[
         (dados["ACAO_BASE"] == "ENTRADA")
-        & dados["SETOR"].isin(setores_fluxo)
+        & (dados["SETOR"] == "Qualidade")
         & (dados["QUANTIDADE_NUM"] > 0)
     ].copy()
-    if entradas.empty:
+    movimentos_qualidade = dados[
+        dados["ACAO_BASE"].isin(ACOES_MOVIMENTO_DASHBOARD)
+        & (dados["SETOR"] == "Qualidade")
+        & (dados["QUANTIDADE_NUM"] > 0)
+    ].copy()
+    if not entradas_qualidade.empty:
+        chaves_qualidade = ["OP", "CODIGO", "PRODUTO", "SETOR"]
+        programado = (
+            entradas_qualidade.groupby(chaves_qualidade, dropna=False)
+            .agg(
+                DATA_PRIORIDADE=("DATA", "min"),
+                QUANTIDADE_NUM=("QUANTIDADE_NUM", "sum"),
+            )
+            .reset_index()
+        )
+        realizado = (
+            movimentos_qualidade.groupby(chaves_qualidade, dropna=False)["QUANTIDADE_NUM"]
+            .sum()
+            .rename("REALIZADO_NUM")
+            .reset_index()
+            if not movimentos_qualidade.empty
+            else pd.DataFrame(columns=[*chaves_qualidade, "REALIZADO_NUM"])
+        )
+        partes.append(programado.merge(realizado, on=chaves_qualidade, how="left"))
+
+    entradas_embalagem = dados[
+        (dados["ACAO_BASE"] == "ENTRADA")
+        & (dados["SETOR"] == "Embalagem")
+        & (dados["QUANTIDADE_NUM"] > 0)
+    ].copy()
+    movimentos_embalagem = dados[
+        dados["ACAO_BASE"].isin(ACOES_MOVIMENTO_DASHBOARD)
+        & (dados["SETOR"] == "Embalagem")
+        & (dados["QUANTIDADE_NUM"] > 0)
+    ].copy()
+    if not entradas_embalagem.empty:
+        chaves_embalagem = ["CODIGO", "PRODUTO", "SETOR"]
+        programado = (
+            entradas_embalagem.groupby(chaves_embalagem, dropna=False)
+            .agg(
+                DATA_PRIORIDADE=("DATA", "min"),
+                QUANTIDADE_NUM=("QUANTIDADE_NUM", "sum"),
+            )
+            .reset_index()
+        )
+        realizado = (
+            movimentos_embalagem.groupby(chaves_embalagem, dropna=False)["QUANTIDADE_NUM"]
+            .sum()
+            .rename("REALIZADO_NUM")
+            .reset_index()
+            if not movimentos_embalagem.empty
+            else pd.DataFrame(columns=[*chaves_embalagem, "REALIZADO_NUM"])
+        )
+        embalagem = programado.merge(realizado, on=chaves_embalagem, how="left")
+        embalagem["OP"] = ""
+        partes.append(embalagem)
+
+    if not partes:
         return pd.DataFrame(columns=colunas)
 
-    movimentos = dados[
-        dados["ACAO_BASE"].isin(ACOES_MOVIMENTO_DASHBOARD)
-        & dados["SETOR"].isin(setores_fluxo)
-        & (dados["QUANTIDADE_NUM"] > 0)
-    ].copy()
-
-    programado = (
-        entradas.groupby(chaves_ordem, dropna=False)
-        .agg(
-            DATA_PRIORIDADE=("DATA", "min"),
-            QUANTIDADE_NUM=("QUANTIDADE_NUM", "sum"),
-        )
-        .reset_index()
-    )
-    realizado = (
-        movimentos.groupby(chaves_ordem, dropna=False)["QUANTIDADE_NUM"]
-        .sum()
-        .rename("REALIZADO_NUM")
-        .reset_index()
-        if not movimentos.empty
-        else pd.DataFrame(columns=[*chaves_ordem, "REALIZADO_NUM"])
-    )
-
-    fluxo = programado.merge(realizado, on=chaves_ordem, how="left")
+    fluxo = pd.concat(partes, ignore_index=True, sort=False)
     fluxo["REALIZADO_NUM"] = pd.to_numeric(fluxo["REALIZADO_NUM"], errors="coerce").fillna(0)
     fluxo["SALDO_NUM"] = (fluxo["QUANTIDADE_NUM"] - fluxo["REALIZADO_NUM"]).clip(lower=0)
     fluxo["STATUS"] = fluxo["SALDO_NUM"].apply(lambda saldo: "OK" if saldo <= 0 else "PENDENTE")
