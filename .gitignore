@@ -11,3 +11,4 @@ correcao_historico_planejamento_*.csv
 correcao_historico_acoes_*.csv
 correcao_qualidade_*.csv
 pausas_manutencao_*.csv
+auto_acoes_simples_*.csv

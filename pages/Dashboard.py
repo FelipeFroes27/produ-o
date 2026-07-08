@@ -607,6 +607,78 @@ def enriquecer_produtos(dados, produtos, coluna_codigo, coluna_produto):
     return dados
 
 
+def programacao_fluxo_historico(historico):
+    colunas = [
+        "USUARIO_RESPONSAVEL",
+        "OP",
+        "COD_PRODUTO",
+        "PRODUTO",
+        "ABA_ORIGEM",
+        "DATA_PRIORIDADE",
+        "QUANTIDADE_NUM",
+        "REALIZADO_NUM",
+        "SALDO_NUM",
+        "STATUS",
+        "ATRASADA",
+    ]
+    if historico.empty:
+        return pd.DataFrame(columns=colunas)
+
+    dados = historico.copy()
+    if "ACAO_BASE" not in dados.columns:
+        dados["ACAO_BASE"] = dados["ACAO"].map(acao_base_historico)
+    if "ACAO_ETAPA" not in dados.columns:
+        dados["ACAO_ETAPA"] = dados["ACAO"].map(acao_etapa_historico)
+    if "SETOR" not in dados.columns:
+        dados["SETOR"] = dados["ACAO_ETAPA"].map(SETOR_NORMALIZADO_PARA_LABEL).fillna("")
+
+    setores_fluxo = ["Qualidade", "Embalagem"]
+    chaves_ordem = ["OP", "CODIGO", "PRODUTO", "SETOR"]
+    entradas = dados[
+        (dados["ACAO_BASE"] == "ENTRADA")
+        & dados["SETOR"].isin(setores_fluxo)
+        & (dados["QUANTIDADE_NUM"] > 0)
+    ].copy()
+    if entradas.empty:
+        return pd.DataFrame(columns=colunas)
+
+    movimentos = dados[
+        dados["ACAO_BASE"].isin(ACOES_MOVIMENTO_DASHBOARD)
+        & dados["SETOR"].isin(setores_fluxo)
+        & (dados["QUANTIDADE_NUM"] > 0)
+    ].copy()
+
+    programado = (
+        entradas.groupby(chaves_ordem, dropna=False)
+        .agg(
+            USUARIO_RESPONSAVEL=("USUARIO_RESPONSAVEL", "first"),
+            DATA_PRIORIDADE=("DATA", "min"),
+            QUANTIDADE_NUM=("QUANTIDADE_NUM", "sum"),
+        )
+        .reset_index()
+    )
+    realizado = (
+        movimentos.groupby(chaves_ordem, dropna=False)["QUANTIDADE_NUM"]
+        .sum()
+        .rename("REALIZADO_NUM")
+        .reset_index()
+        if not movimentos.empty
+        else pd.DataFrame(columns=[*chaves_ordem, "REALIZADO_NUM"])
+    )
+
+    fluxo = programado.merge(realizado, on=chaves_ordem, how="left")
+    fluxo["REALIZADO_NUM"] = pd.to_numeric(fluxo["REALIZADO_NUM"], errors="coerce").fillna(0)
+    fluxo["SALDO_NUM"] = (fluxo["QUANTIDADE_NUM"] - fluxo["REALIZADO_NUM"]).clip(lower=0)
+    fluxo["STATUS"] = fluxo["SALDO_NUM"].apply(lambda saldo: "OK" if saldo <= 0 else "PENDENTE")
+    fluxo["ATRASADA"] = False
+    fluxo = fluxo.rename(columns={"CODIGO": "COD_PRODUTO", "SETOR": "ABA_ORIGEM"})
+
+    for coluna in colunas:
+        if coluna not in fluxo.columns:
+            fluxo[coluna] = ""
+    return fluxo[colunas]
+
+
 def opcoes_combobox(serie):
     valores = sorted(
         valor
@@ -643,8 +715,7 @@ def aplicar_filtros(programacao, historico):
         historico = historico.iloc[0:0]
 
     if setores_selecionados:
-        setores_planejamento = [setor for setor in setores_selecionados if SETOR_LABEL_PARA_NORMALIZADO.get(setor) in SETORES_PLANEJAMENTO_NORM]
-        programacao = programacao[programacao["ABA_ORIGEM"].isin(setores_planejamento)]
+        programacao = programacao[programacao["ABA_ORIGEM"].isin(setores_selecionados)]
         historico = historico[historico["SETOR"].isin(setores_selecionados)]
     else:
         programacao = programacao.iloc[0:0]
@@ -1803,6 +1874,9 @@ except Exception as exc:
     st.stop()
 
 programacao = filtrar_programacao(ordens)
+programacao_fluxo = programacao_fluxo_historico(historico)
+if not programacao_fluxo.empty:
+    programacao = pd.concat([programacao, programacao_fluxo], ignore_index=True, sort=False)
 programacao = enriquecer_produtos(programacao, bd_produtos, "COD_PRODUTO", "PRODUTO")
 historico = enriquecer_produtos(historico, bd_produtos, "CODIGO", "PRODUTO")
 

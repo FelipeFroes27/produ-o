@@ -609,6 +609,64 @@ def modal_informacao(ordem):
     render_detalhes_ordem(ordem)
 
 
+@st.dialog("Iniciar qualidade", width="large")
+def modal_inicio_qualidade(ordem, avaliadores):
+    render_detalhes_ordem(ordem)
+    if not avaliadores:
+        st.error("Nenhum usuario com cargo Qualidade foi encontrado.")
+        return
+
+    chave = f"{ordem['ABA_ORIGEM']}_{ordem['OP']}_{ordem['COD_PRODUTO']}_inicio"
+    trava = f"qualidade_trava_{chave}"
+    with st.form(f"form_{chave}"):
+        usuario = st.selectbox("Usuario da qualidade", avaliadores)
+        confirmar = st.form_submit_button(
+            "Lancamento em andamento..." if st.session_state.get(trava) else "Confirmar inicio",
+            use_container_width=True,
+            disabled=bool(st.session_state.get(trava, False)),
+        )
+
+    if confirmar:
+        st.session_state[trava] = True
+        try:
+            lancar_inicio_qualidade(ordem, usuario)
+        except Exception as exc:
+            st.session_state.pop(trava, None)
+            st.error(str(exc))
+        else:
+            st.session_state.pop(trava, None)
+            st.rerun()
+
+
+@st.dialog("Pausar qualidade", width="large")
+def modal_pausa_qualidade(ordem, avaliadores):
+    render_detalhes_ordem(ordem)
+    if not avaliadores:
+        st.error("Nenhum usuario com cargo Qualidade foi encontrado.")
+        return
+
+    chave = f"{ordem['ABA_ORIGEM']}_{ordem['OP']}_{ordem['COD_PRODUTO']}_pausa"
+    trava = f"qualidade_trava_{chave}"
+    with st.form(f"form_{chave}"):
+        usuario = st.selectbox("Usuario da qualidade", avaliadores)
+        confirmar = st.form_submit_button(
+            "Lancamento em andamento..." if st.session_state.get(trava) else "Confirmar pausa",
+            use_container_width=True,
+            disabled=bool(st.session_state.get(trava, False)),
+        )
+
+    if confirmar:
+        st.session_state[trava] = True
+        try:
+            lancar_pausa_qualidade(ordem, usuario)
+        except Exception as exc:
+            st.session_state.pop(trava, None)
+            st.error(str(exc))
+        else:
+            st.session_state.pop(trava, None)
+            st.rerun()
+
+
 @st.dialog("Aprovar qualidade", width="large")
 def modal_aprovacao(ordem, avaliadores, usuario_padrao=""):
     render_detalhes_ordem(ordem)
@@ -746,30 +804,14 @@ def render_card_qualidade(linha, avaliadores):
                 desabilitado = (em_andamento and not pausada) or bool(st.session_state.get(trava, False))
                 texto = "Retomar" if pausada else "Iniciar"
                 if st.button(texto, key=key, help="Registrar inicio/retomada da qualidade", disabled=desabilitado):
-                    st.session_state[trava] = True
-                    try:
-                        lancar_inicio_qualidade(linha, "")
-                    except Exception as exc:
-                        st.session_state.pop(trava, None)
-                        st.error(str(exc))
-                    else:
-                        st.session_state.pop(trava, None)
-                        st.rerun()
+                    modal_inicio_qualidade(linha, avaliadores)
             with acao_2:
                 key = f"pausar_{chave_css}"
                 trava = f"qualidade_trava_{key}"
                 aplicar_icone_botao(key, ICONES_BOTOES["pausa"])
                 desabilitado = pausada or not em_andamento or bool(st.session_state.get(trava, False))
                 if st.button("Pausar", key=key, help="Pausar contagem da qualidade", disabled=desabilitado):
-                    st.session_state[trava] = True
-                    try:
-                        lancar_pausa_qualidade(linha, "")
-                    except Exception as exc:
-                        st.session_state.pop(trava, None)
-                        st.error(str(exc))
-                    else:
-                        st.session_state.pop(trava, None)
-                        st.rerun()
+                    modal_pausa_qualidade(linha, avaliadores)
             with acao_3:
                 key = f"aprovar_{chave_css}"
                 aplicar_icone_botao(key, ICONES_BOTOES["aprovacao"])

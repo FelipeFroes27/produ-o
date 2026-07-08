@@ -391,7 +391,13 @@ def lancar_inicio_setor(ordem, setor, usuario=""):
     ultima_acao = ultima_acao_setor_ordem(ordem, setor)
     if ultima_acao == "INICIO":
         raise ValueError(f"Esta etapa de {str(setor).lower()} ja esta em andamento.")
-    registrar_historico(ordem, 0, acao_descritiva("Inicio", setor), avaliador=usuario)
+    registrar_historico(
+        ordem,
+        0,
+        acao_descritiva("Inicio", setor),
+        avaliador=usuario,
+        usuario_responsavel=usuario,
+    )
     carregar_historico.clear()
 
 
@@ -401,7 +407,13 @@ def lancar_pausa_setor(ordem, setor, usuario=""):
         if ultima_acao == "PAUSA":
             raise ValueError(f"Esta etapa de {str(setor).lower()} ja esta pausada.")
         raise ValueError(f"Inicie a etapa de {str(setor).lower()} antes de pausar.")
-    registrar_historico(ordem, 0, acao_descritiva("Pausa", setor), avaliador=usuario)
+    registrar_historico(
+        ordem,
+        0,
+        acao_descritiva("Pausa", setor),
+        avaliador=usuario,
+        usuario_responsavel=usuario,
+    )
     carregar_historico.clear()
 
 
@@ -421,7 +433,7 @@ def lancar_movimento_setor(ordem, quantidade, setor, usuario="", campo_pendente=
         raise ValueError(f"A quantidade passa do pendente de {str(setor).lower()} ({_formatar_numero(pendente)}).")
 
     acao = acao_descritiva("Fim" if quantidade >= pendente else "Parcial", setor)
-    registrar_historico(ordem, quantidade, acao, avaliador=usuario)
+    registrar_historico(ordem, quantidade, acao, avaliador=usuario, usuario_responsavel=usuario)
     carregar_historico.clear()
 
 
@@ -460,15 +472,28 @@ def lancar_aprovacao_qualidade(ordem, quantidade_aprovada, avaliador, embalagem=
     if quantidade_aprovada > pendente:
         raise ValueError(f"A quantidade aprovada passa do pendente de qualidade ({_formatar_numero(pendente)}).")
 
-    registrar_historico(ordem, quantidade_aprovada, acao_descritiva("Aprovado", "Qualidade"), avaliador=avaliador)
+    registrar_historico(
+        ordem,
+        quantidade_aprovada,
+        acao_descritiva("Aprovado", "Qualidade"),
+        avaliador=avaliador,
+        usuario_responsavel=avaliador,
+    )
     if quantidade_aprovada >= pendente:
-        registrar_historico(ordem, 0, acao_descritiva("Fim", "Qualidade"), avaliador=avaliador)
+        registrar_historico(
+            ordem,
+            0,
+            acao_descritiva("Fim", "Qualidade"),
+            avaliador=avaliador,
+            usuario_responsavel=avaliador,
+        )
     if embalagem:
         registrar_historico(
             ordem,
             quantidade_aprovada,
             acao_descritiva("Entrada", "Embalagem"),
             avaliador=avaliador,
+            usuario_responsavel=avaliador,
         )
     carregar_historico.clear()
 
@@ -498,10 +523,17 @@ def lancar_reprovacao_qualidade(ordem, quantidade_reprovada, avaliador):
             quantidade_reprovada,
             acao_descritiva("Reprovado", "Qualidade"),
             avaliador=avaliador,
+            usuario_responsavel=avaliador,
         )
         pendente_qualidade = float(ordem.get("QUANTIDADE_PENDENTE", 0) or 0)
         if quantidade_reprovada >= pendente_qualidade:
-            registrar_historico(ordem, 0, acao_descritiva("Fim", "Qualidade"), avaliador=avaliador)
+            registrar_historico(
+                ordem,
+                0,
+                acao_descritiva("Fim", "Qualidade"),
+                avaliador=avaliador,
+                usuario_responsavel=avaliador,
+            )
     except Exception as exc:
         try:
             worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(realizado_atual))

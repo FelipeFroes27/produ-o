@@ -531,6 +531,66 @@ def modal_informacao(item):
     render_detalhes_item(item)
 
 
+@st.dialog("Iniciar embalagem", width="large")
+def modal_inicio_embalagem(item, usuarios):
+    render_detalhes_item(item)
+    if not usuarios:
+        st.error("Nenhum usuario foi encontrado na aba Usuarios.")
+        return
+
+    ordem = montar_ordem_embalagem(item)
+    chave = chave_css_texto(item["COD_PRODUTO"], item["PRODUTO"], "inicio")
+    trava = f"embalagem_trava_{chave}"
+    with st.form(f"form_{chave}"):
+        usuario = st.selectbox("Usuario da embalagem", usuarios)
+        confirmar = st.form_submit_button(
+            "Lancamento em andamento..." if st.session_state.get(trava) else "Confirmar inicio",
+            use_container_width=True,
+            disabled=bool(st.session_state.get(trava, False)),
+        )
+
+    if confirmar:
+        st.session_state[trava] = True
+        try:
+            lancar_inicio_embalagem(ordem, usuario=usuario)
+        except Exception as exc:
+            st.session_state.pop(trava, None)
+            st.error(str(exc))
+        else:
+            st.session_state.pop(trava, None)
+            st.rerun()
+
+
+@st.dialog("Pausar embalagem", width="large")
+def modal_pausa_embalagem(item, usuarios):
+    render_detalhes_item(item)
+    if not usuarios:
+        st.error("Nenhum usuario foi encontrado na aba Usuarios.")
+        return
+
+    ordem = montar_ordem_embalagem(item)
+    chave = chave_css_texto(item["COD_PRODUTO"], item["PRODUTO"], "pausa")
+    trava = f"embalagem_trava_{chave}"
+    with st.form(f"form_{chave}"):
+        usuario = st.selectbox("Usuario da embalagem", usuarios)
+        confirmar = st.form_submit_button(
+            "Lancamento em andamento..." if st.session_state.get(trava) else "Confirmar pausa",
+            use_container_width=True,
+            disabled=bool(st.session_state.get(trava, False)),
+        )
+
+    if confirmar:
+        st.session_state[trava] = True
+        try:
+            lancar_pausa_embalagem(ordem, usuario=usuario)
+        except Exception as exc:
+            st.session_state.pop(trava, None)
+            st.error(str(exc))
+        else:
+            st.session_state.pop(trava, None)
+            st.rerun()
+
+
 @st.dialog("Concluir embalagem", width="large")
 def modal_conclusao(item, usuarios):
     render_detalhes_item(item)
@@ -613,30 +673,14 @@ def render_card_embalagem(item, usuarios):
                 desabilitado = (em_andamento and not pausada) or bool(st.session_state.get(trava, False))
                 texto = "Retomar" if pausada else "Iniciar"
                 if st.button(texto, key=key, help="Registrar inicio/retomada da embalagem", disabled=desabilitado):
-                    st.session_state[trava] = True
-                    try:
-                        lancar_inicio_embalagem(ordem)
-                    except Exception as exc:
-                        st.session_state.pop(trava, None)
-                        st.error(str(exc))
-                    else:
-                        st.session_state.pop(trava, None)
-                        st.rerun()
+                    modal_inicio_embalagem(item, usuarios)
             with acao_2:
                 key = f"pausar_{chave_css}"
                 trava = f"embalagem_trava_{key}"
                 aplicar_icone_botao(key, ICONES_BOTOES["pausa"])
                 desabilitado = pausada or not em_andamento or bool(st.session_state.get(trava, False))
                 if st.button("Pausar", key=key, help="Pausar contagem da embalagem", disabled=desabilitado):
-                    st.session_state[trava] = True
-                    try:
-                        lancar_pausa_embalagem(ordem)
-                    except Exception as exc:
-                        st.session_state.pop(trava, None)
-                        st.error(str(exc))
-                    else:
-                        st.session_state.pop(trava, None)
-                        st.rerun()
+                    modal_pausa_embalagem(item, usuarios)
             with acao_3:
                 key = f"consulta_{chave_css}"
                 aplicar_icone_botao(key, ICONES_BOTOES["consulta"])

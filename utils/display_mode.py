@@ -2,7 +2,7 @@ import streamlit as st
 
 
 MENU_ABERTO_PADRAO = True
-MANUTENCAO_ATIVA = True
+MANUTENCAO_ATIVA = False
 
 
 def render_menu_lateral():
