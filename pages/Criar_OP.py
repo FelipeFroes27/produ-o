@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from utils.display_mode import ativar_modo_exibicao, render_menu_lateral
+from utils.display_mode import ativar_modo_exibicao, page_link_icon, render_menu_lateral
 from utils.sheets import (
     ABAS_PLANEJAMENTO,
     carregar_bd_produtos,
@@ -14,7 +14,7 @@ from utils.sheets import (
 
 st.set_page_config(
     page_title="Criar OP",
-    page_icon="icones/consulta-logo-refinado.png",
+    page_icon="icones/menu.png",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -111,15 +111,53 @@ def aplicar_estilo():
             margin-bottom: 0.25rem;
         }
 
-        div[data-testid="stForm"] {
+        .erp-panel {
             border: 2px solid #000000;
             border-radius: 8px;
-            padding: 12px 14px 10px 14px;
+            background: #ffffff;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .erp-section {
+            border-bottom: 1px solid #000000;
+            background: #f7f7f7;
+            padding: 8px 10px;
+            color: #000000;
+            font-size: 13px;
+            font-weight: 900;
+        }
+
+        .erp-row {
+            border-bottom: 1px solid #d0d0d0;
+            padding: 6px 8px;
             background: #ffffff;
         }
 
-        div[data-testid="stForm"] > div {
-            gap: .45rem !important;
+        .erp-row:last-child {
+            border-bottom: 0;
+        }
+
+        .erp-label {
+            min-height: 38px;
+            display: flex;
+            align-items: center;
+            color: #000000;
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        .erp-note {
+            color: #333333;
+            font-size: 12px;
+            font-weight: 750;
+            padding: 0 10px 6px 10px;
+        }
+
+        .erp-action {
+            display: flex;
+            justify-content: flex-end;
+            padding-top: 4px;
         }
 
         div[data-baseweb="input"],
@@ -151,6 +189,10 @@ def aplicar_estilo():
             padding: 6px 10px !important;
             margin: 4px 0 !important;
         }
+
+        div[data-testid="column"] {
+            gap: .25rem !important;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -160,16 +202,16 @@ def aplicar_estilo():
 def render_sidebar():
     with st.sidebar:
         st.markdown('<div class="sidebar-logo">', unsafe_allow_html=True)
-        st.image("Logo Branco.bmp", width=72)
-        st.image("logo preto goper.png", width=32)
+        st.image("icones/Logo Branco.bmp", width=72)
+        st.image("icones/logo preto goper.png", width=32)
         st.markdown("</div>", unsafe_allow_html=True)
-        st.page_link("app.py", label="Inicio")
-        st.page_link("pages/Criar_OP.py", label="Criar OP")
-        st.page_link("pages/Producao.py", label="Producao")
-        st.page_link("pages/Qualidade.py", label="Qualidade")
-        st.page_link("pages/Embalagens.py", label="Embalagens")
-        st.page_link("pages/Historico_OP.py", label="Historico OP")
-        st.page_link("pages/Dashboard.py", label="Dashboard")
+        page_link_icon("app.py", "Inicio", "icones/menu.png")
+        page_link_icon("pages/Criar_OP.py", "Criar OP", "icones/menu.png")
+        page_link_icon("pages/Producao.py", "Producao", "icones/producao.png")
+        page_link_icon("pages/Qualidade.py", "Qualidade", "icones/qualidade.png")
+        page_link_icon("pages/Embalagens.py", "Embalagens", "icones/embalagem.png")
+        page_link_icon("pages/Historico_OP.py", "Historico OP", "icones/historico.png")
+        page_link_icon("pages/Dashboard.py", "Dashboard", "icones/indicadores.png")
 
 
 def numero(valor):
@@ -253,6 +295,18 @@ def rotulo_sugestao(item):
     return f"{item['COD_PRODUTO']} | {str(item['PRODUTO'])[:80]} | {numero(item['Ordens'])} ordem(ns)"
 
 
+def linha_inicio(rotulo):
+    st.markdown('<div class="erp-row">', unsafe_allow_html=True)
+    col_label, col_campo = st.columns([0.18, 0.82], vertical_alignment="center")
+    with col_label:
+        st.markdown(f'<div class="erp-label">{rotulo}</div>', unsafe_allow_html=True)
+    return col_campo
+
+
+def linha_fim():
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
 aplicar_estilo()
 render_sidebar()
 
@@ -281,14 +335,17 @@ codigo_atual = st.session_state.get("criar_op_codigo", "")
 produto_encontrado = produto_por_codigo(produtos, codigo_atual)
 sugestoes = sugestoes_itens(ordens)
 
-topo1, topo2, topo3 = st.columns([1, 2.2, 1.1])
-with topo1:
-    aba = st.selectbox("Setor", ABAS_PLANEJAMENTO, key="criar_op_setor")
-with topo2:
-    rotulos_sugestoes = [""] + [rotulo_sugestao(item) for _, item in sugestoes.iterrows()]
-    sugestao = st.selectbox("Atalho por itens frequentes", rotulos_sugestoes)
-with topo3:
-    codigo = st.text_input("Codigo do item", key="criar_op_codigo")
+st.markdown('<div class="erp-panel">', unsafe_allow_html=True)
+st.markdown('<div class="erp-section">Dados da ordem</div>', unsafe_allow_html=True)
+
+with linha_inicio("Setor"):
+    col_a, col_b = st.columns([0.32, 0.68])
+    with col_a:
+        aba = st.selectbox("Setor", ABAS_PLANEJAMENTO, key="criar_op_setor", label_visibility="collapsed")
+    with col_b:
+        rotulos_sugestoes = [""] + [rotulo_sugestao(item) for _, item in sugestoes.iterrows()]
+        sugestao = st.selectbox("Atalho por itens frequentes", rotulos_sugestoes, label_visibility="collapsed")
+linha_fim()
 
 if sugestao:
     codigo_sugerido = sugestao.split("|", 1)[0].strip()
@@ -296,7 +353,33 @@ if sugestao:
         aplicar_sugestao(codigo_sugerido)
 
 op_sugerida = proxima_op(ordens, aba)
-produto_encontrado = produto_por_codigo(produtos, codigo)
+
+with linha_inicio("N da OP"):
+    col_a, col_b, col_c = st.columns([0.28, 0.28, 0.44])
+    with col_a:
+        op = st.text_input("N da OP", value=op_sugerida, label_visibility="collapsed")
+    with col_b:
+        quantidade = st.number_input("Quantidade", min_value=1, value=1, step=1, label_visibility="collapsed")
+    with col_c:
+        usuarios_lista = [""] + nomes_usuarios(usuarios)
+        responsavel = st.selectbox("Responsavel", usuarios_lista, label_visibility="collapsed")
+linha_fim()
+
+with linha_inicio("Codigo"):
+    col_a, col_b = st.columns([0.25, 0.75])
+    with col_a:
+        codigo = st.text_input("Codigo do item", key="criar_op_codigo", label_visibility="collapsed")
+    produto_encontrado = produto_por_codigo(produtos, codigo)
+    produto_padrao = produto_encontrado["PRODUTO"] if produto_encontrado else ""
+    with col_b:
+        produto = st.text_input(
+            "Descricao do item",
+            value=produto_padrao,
+            disabled=bool(produto_encontrado),
+            label_visibility="collapsed",
+        )
+linha_fim()
+
 if produto_encontrado:
     detalhes = []
     for campo in ["CATEGORIA", "MARCA", "GRUPO"]:
@@ -306,52 +389,41 @@ if produto_encontrado:
     info_item = f"Item encontrado: {produto_encontrado['PRODUTO']}"
     if detalhes:
         info_item += " | " + " | ".join(detalhes)
-    st.caption(info_item)
+    st.markdown(f'<div class="erp-note">{info_item}</div>', unsafe_allow_html=True)
 elif codigo:
     st.warning("Codigo nao encontrado no Bd_produtos. Confira o codigo ou preencha a descricao manualmente.")
 else:
-    st.caption(f"Proxima OP sugerida para {aba}: {op_sugerida}")
+    st.markdown(f'<div class="erp-note">Proxima OP sugerida para {aba}: {op_sugerida}</div>', unsafe_allow_html=True)
 
-with st.form("form_criar_op"):
-    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
-    with col1:
-        st.text_input("Setor selecionado", value=aba, disabled=True)
-    with col2:
-        op = st.text_input("N da OP", value=op_sugerida)
-    with col3:
-        quantidade = st.number_input("Quantidade", min_value=1, value=1, step=1)
-    with col4:
-        usuarios_lista = [""] + nomes_usuarios(usuarios)
-        responsavel = st.selectbox("Responsavel", usuarios_lista)
+with linha_inicio("Datas"):
+    col_a, col_b, col_c = st.columns([0.25, 0.25, 0.5])
+    with col_a:
+        data_abertura = st.date_input("Data de abertura", label_visibility="collapsed")
+    with col_b:
+        data_prevista = st.date_input("Data prevista", label_visibility="collapsed")
+    with col_c:
+        obs = st.text_input("Observacoes", label_visibility="collapsed")
+linha_fim()
 
-    produto_padrao = produto_encontrado["PRODUTO"] if produto_encontrado else ""
-    produto = st.text_input(
-        "Descricao do item",
-        value=produto_padrao,
-        disabled=bool(produto_encontrado),
-    )
+cod_peca = ""
+peca = ""
+qtd_pecas = ""
+if aba == ABAS_PLANEJAMENTO[2]:
+    st.markdown('<div class="erp-section">Pecas</div>', unsafe_allow_html=True)
+    with linha_inicio("Peca"):
+        col_a, col_b, col_c = st.columns([0.25, 0.55, 0.2])
+        with col_a:
+            cod_peca = st.text_input("Codigo da peca", label_visibility="collapsed")
+        with col_b:
+            peca = st.text_input("Descricao da peca", label_visibility="collapsed")
+        with col_c:
+            qtd_pecas = st.number_input("Qtd. pecas", min_value=0, value=0, step=1, label_visibility="collapsed")
+    linha_fim()
 
-    col6, col7, col8 = st.columns([1, 1, 2])
-    with col6:
-        data_abertura = st.date_input("Data de abertura")
-    with col7:
-        data_prevista = st.date_input("Data prevista")
-    with col8:
-        obs = st.text_input("Observacoes")
-
-    cod_peca = ""
-    peca = ""
-    qtd_pecas = ""
-    if aba == ABAS_PLANEJAMENTO[2]:
-        col9, col10, col11 = st.columns([1, 2, 1])
-        with col9:
-            cod_peca = st.text_input("Codigo da peca")
-        with col10:
-            peca = st.text_input("Descricao da peca")
-        with col11:
-            qtd_pecas = st.number_input("Qtd. pecas", min_value=0, value=0, step=1)
-
-    confirmar = st.form_submit_button("Criar ordem", use_container_width=True)
+st.markdown("</div>", unsafe_allow_html=True)
+acao_col1, acao_col2 = st.columns([0.82, 0.18])
+with acao_col2:
+    confirmar = st.button("Criar ordem", use_container_width=True)
 
 if confirmar:
     descricao_final = produto_encontrado["PRODUTO"] if produto_encontrado else produto

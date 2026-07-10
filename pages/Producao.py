@@ -6,13 +6,13 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from utils.display_mode import ativar_modo_exibicao, render_menu_lateral
+from utils.display_mode import ativar_modo_exibicao, page_link_icon, render_menu_lateral
 from utils.sheets import _normalizar, acao_base_historico, acao_etapa_historico, carregar_historico, carregar_ordens, carregar_resumo, carregar_usuarios, lancar_inicio_ordem, lancar_pausa_ordem, lancar_realizacao
 
 
 st.set_page_config(
     page_title="Producao",
-    page_icon="icones/consulta-logo-refinado.png",
+    page_icon="icones/producao.png",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -22,10 +22,10 @@ render_menu_lateral()
 
 CORES = ["#2563eb", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4"]
 ICONES_BOTOES = {
-    "inicio": "start-up.png",
-    "pausa": "pausa.png",
-    "consulta": "informacoes.png",
-    "conclusao": "verificado.png",
+    "inicio": "icones/start-up.png",
+    "pausa": "icones/pausa.png",
+    "consulta": "icones/informacoes.png",
+    "conclusao": "icones/verificado.png",
 }
 
 
@@ -557,16 +557,16 @@ def aplicar_estilo():
 def render_sidebar():
     with st.sidebar:
         st.markdown('<div class="sidebar-logo">', unsafe_allow_html=True)
-        st.image("Logo Branco.bmp", width=72)
-        st.image("logo preto goper.png", width=32)
+        st.image("icones/Logo Branco.bmp", width=72)
+        st.image("icones/logo preto goper.png", width=32)
         st.markdown("</div>", unsafe_allow_html=True)
-        st.page_link("app.py", label="Inicio")
-        st.page_link("pages/Criar_OP.py", label="Criar OP")
-        st.page_link("pages/Producao.py", label="Producao")
-        st.page_link("pages/Qualidade.py", label="Qualidade")
-        st.page_link("pages/Embalagens.py", label="Embalagens")
-        st.page_link("pages/Historico_OP.py", label="Histórico OP")
-        st.page_link("pages/Dashboard.py", label="Dashboard")
+        page_link_icon("app.py", "Inicio", "icones/menu.png")
+        page_link_icon("pages/Criar_OP.py", "Criar OP", "icones/menu.png")
+        page_link_icon("pages/Producao.py", "Producao", "icones/producao.png")
+        page_link_icon("pages/Qualidade.py", "Qualidade", "icones/qualidade.png")
+        page_link_icon("pages/Embalagens.py", "Embalagens", "icones/embalagem.png")
+        page_link_icon("pages/Historico_OP.py", "Histórico OP", "icones/historico.png")
+        page_link_icon("pages/Dashboard.py", "Dashboard", "icones/indicadores.png")
 
 
 def normalizar_status(status):
@@ -1203,8 +1203,8 @@ def grafico_por_aba(ordens_usuario):
 aplicar_estilo()
 render_sidebar()
 
-logo_branco = base64.b64encode(Path("Logo Branco.bmp").read_bytes()).decode("utf-8")
-logo_goper = base64.b64encode(Path("logo preto goper.png").read_bytes()).decode("utf-8")
+logo_branco = base64.b64encode(Path("icones/Logo Branco.bmp").read_bytes()).decode("utf-8")
+logo_goper = base64.b64encode(Path("icones/logo preto goper.png").read_bytes()).decode("utf-8")
 
 st.markdown(
     f"""

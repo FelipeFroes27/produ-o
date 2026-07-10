@@ -5,6 +5,14 @@ MENU_ABERTO_PADRAO = True
 MANUTENCAO_ATIVA = False
 
 
+def page_link_icon(page, label, icon_path):
+    col_icon, col_link = st.columns([0.16, 0.84], vertical_alignment="center")
+    with col_icon:
+        st.image(icon_path, width=18)
+    with col_link:
+        st.page_link(page, label=label)
+
+
 def render_menu_lateral():
     if MANUTENCAO_ATIVA:
         _render_manutencao()
