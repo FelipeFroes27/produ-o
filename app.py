@@ -193,6 +193,7 @@ with st.sidebar:
     st.image("logo preto goper.png", width=32)
     st.markdown("</div>", unsafe_allow_html=True)
     st.page_link("app.py", label="Inicio")
+    st.page_link("pages/Criar_OP.py", label="Criar OP")
     st.page_link("pages/Producao.py", label="Producao")
     st.page_link("pages/Qualidade.py", label="Qualidade")
     st.page_link("pages/Embalagens.py", label="Embalagens")

@@ -63,6 +63,11 @@ COLUNAS_PRODUTOS = [
 ]
 COLUNAS_FERIADOS = ["DATA"]
 ETAPAS_PLANEJAMENTO = ["PRODUCAO", "MANUTENCAO", "PECAS"]
+CABECALHOS_PLANEJAMENTO = {
+    "Produção": ["DATA_ABERTURA", "N° DA OP", "COD_PRODUTO", "DESCRIÇÃO", "QUANTIDADE", "OBS", "DATA_PREVISTA", "REALIZADO", "STATUS", "USUÁRIO RESPONSAVEL"],
+    "Manutenção": ["DATA", "N° DA OP", "COD_PRODUTO", "DESCRIÇÃO", "OBS", "QUANTIDADE", "REALIZADO", "STATUS", "USUÁRIO RESPONSAVEL"],
+    "Peças": ["DATA", "N° DA OP", "COD_PRODUTO", "DESCRIÇÃO", "COD_PEÇA", "DESCRIÇÃO PEÇA", "QTD_PEÇAS", "QUANTIDADE", "REALIZADO", "STATUS", "USUÁRIO RESPONSAVEL"],
+}
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -376,6 +381,37 @@ def lancar_encaminhamento_embalagem(ordem, quantidade):
         raise ValueError("Informe uma quantidade maior que zero.")
     registrar_historico(ordem, quantidade, acao_descritiva("Entrada", "Embalagem"))
     carregar_historico.clear()
+
+
+def criar_ordem_planejamento(aba, dados):
+    aba = str(aba or "").strip()
+    if aba not in ABAS_PLANEJAMENTO:
+        raise ValueError("Escolha uma aba de planejamento valida.")
+
+    worksheet = abrir_planilha().worksheet(aba)
+    headers = [str(header).strip() for header in worksheet.row_values(1) if str(header).strip()]
+    if not headers:
+        headers = CABECALHOS_PLANEJAMENTO[aba]
+    valores = _montar_linha_planejamento(aba, headers, dados)
+    data_bloco = _data_bloco_ordem(aba, dados)
+    if pd.isna(data_bloco):
+        raise ValueError("Informe uma data valida para posicionar a ordem no planejamento.")
+
+    values = worksheet.get_all_values()
+    destino = _localizar_insercao_planejamento(values, headers, data_bloco)
+    linhas = []
+    if destino["novo_bloco"]:
+        linhas.append(headers)
+    linhas.extend([valores, [""] * len(headers)])
+
+    worksheet.insert_rows(linhas, row=destino["linha"], value_input_option="USER_ENTERED")
+    _copiar_formatos_planejamento(worksheet, destino["linha"], len(headers), destino["novo_bloco"])
+    carregar_ordens.clear()
+    return {
+        "aba": aba,
+        "linha": destino["linha"] + (1 if destino["novo_bloco"] else 0),
+        "novo_bloco": destino["novo_bloco"],
+    }
 
 
 def lancar_inicio_ordem(ordem):
@@ -1078,6 +1114,150 @@ def _remover_linhas_de_cabecalho_repetido(df):
         df.columns[0],
     )
     return df[df[primeira_coluna].astype(str).str.strip() != primeira_coluna].copy()
+
+
+def _montar_linha_planejamento(aba, headers, dados):
+    def valor_texto(chaves, padrao=""):
+        for chave in chaves:
+            valor = dados.get(chave, "")
+            if str(valor).strip():
+                return str(valor).strip()
+        return padrao
+
+    mapa = {
+        "DATAABERTURA": _formatar_data_planilha(dados.get("DATA_ABERTURA")),
+        "DATA": _formatar_data_planilha(dados.get("DATA")),
+        "NDAOP": valor_texto(["OP"]),
+        "OP": valor_texto(["OP"]),
+        "CODPRODUTO": valor_texto(["COD_PRODUTO"]),
+        "CODIGOPRODUTO": valor_texto(["COD_PRODUTO"]),
+        "DESCRICAO": valor_texto(["PRODUTO"]),
+        "CODPECA": valor_texto(["COD_PECA"]),
+        "DESCRICAOPECA": valor_texto(["PECA"]),
+        "QTDPECAS": valor_texto(["QTD_PECAS"]),
+        "QUANTIDADE": valor_texto(["QUANTIDADE"]),
+        "OBS": valor_texto(["OBS"]),
+        "DATAPREVISTA": _formatar_data_planilha(dados.get("DATA_PREVISTA")),
+        "REALIZADO": "",
+        "STATUS": "PENDENTE",
+        "USUARIORESPONSAVEL": valor_texto(["USUARIO_RESPONSAVEL"]),
+    }
+
+    linha = []
+    for header in headers:
+        linha.append(mapa.get(_normalizar(header), ""))
+    return linha
+
+
+def _data_bloco_ordem(aba, dados):
+    if aba == ABAS_PLANEJAMENTO[0]:
+        return pd.to_datetime(dados.get("DATA_PREVISTA") or dados.get("DATA_ABERTURA"), dayfirst=True, errors="coerce")
+    return pd.to_datetime(dados.get("DATA"), dayfirst=True, errors="coerce")
+
+
+def _formatar_data_planilha(valor):
+    data = pd.to_datetime(valor, dayfirst=True, errors="coerce")
+    if pd.isna(data):
+        return ""
+    return data.strftime("%d/%m/%Y")
+
+
+def _semana_data(valor):
+    data = pd.to_datetime(valor, dayfirst=True, errors="coerce")
+    if pd.isna(data):
+        return None
+    data = data.normalize()
+    return data - pd.Timedelta(days=int(data.weekday()))
+
+
+def _localizar_insercao_planejamento(values, headers, data_bloco):
+    if not values:
+        return {"linha": 1, "novo_bloco": True}
+
+    largura = len(headers)
+    headers_norm = [_normalizar(header) for header in headers]
+    header_rows = []
+    for indice, row in enumerate(values, start=1):
+        row_norm = [_normalizar(valor) for valor in row[:largura]]
+        if row_norm[: len(headers_norm)] == headers_norm:
+            header_rows.append(indice)
+
+    semana_alvo = _semana_data(data_bloco)
+    if semana_alvo is not None:
+        for posicao, linha_header in enumerate(header_rows):
+            inicio = linha_header + 1
+            fim = (header_rows[posicao + 1] - 1) if posicao + 1 < len(header_rows) else len(values)
+            if _bloco_tem_semana(values, inicio, fim, headers, semana_alvo):
+                return {"linha": fim + 1, "novo_bloco": False}
+
+    ultima_linha = _ultima_linha_usada(values)
+    return {"linha": ultima_linha + 1, "novo_bloco": True}
+
+
+def _bloco_tem_semana(values, inicio, fim, headers, semana_alvo):
+    coluna_data = _indice_data_bloco(headers)
+    if coluna_data is None:
+        return False
+    for row in values[inicio - 1:fim]:
+        if coluna_data >= len(row):
+            continue
+        semana = _semana_data(row[coluna_data])
+        if semana is not None and semana == semana_alvo:
+            return True
+    return False
+
+
+def _indice_data_bloco(headers):
+    candidatos = ["DATAPREVISTA", "DATA", "DATAABERTURA"]
+    for candidato in candidatos:
+        for indice, header in enumerate(headers):
+            if _normalizar(header) == candidato:
+                return indice
+    return None
+
+
+def _ultima_linha_usada(values):
+    for indice in range(len(values), 0, -1):
+        if any(str(valor).strip() for valor in values[indice - 1]):
+            return indice
+    return 0
+
+
+def _copiar_formatos_planejamento(worksheet, linha_inserida, largura, novo_bloco):
+    sheet_id = worksheet.id
+    requests = []
+    if novo_bloco:
+        requests.append(_request_copiar_formato(sheet_id, 1, linha_inserida, largura))
+        requests.append(_request_copiar_formato(sheet_id, 2, linha_inserida + 1, largura))
+        requests.append(_request_copiar_formato(sheet_id, 3, linha_inserida + 2, largura))
+    else:
+        requests.append(_request_copiar_formato(sheet_id, 2, linha_inserida, largura))
+        requests.append(_request_copiar_formato(sheet_id, 3, linha_inserida + 1, largura))
+    if requests:
+        abrir_planilha().batch_update({"requests": requests})
+
+
+def _request_copiar_formato(sheet_id, linha_origem, linha_destino, largura):
+    return {
+        "copyPaste": {
+            "source": {
+                "sheetId": sheet_id,
+                "startRowIndex": linha_origem - 1,
+                "endRowIndex": linha_origem,
+                "startColumnIndex": 0,
+                "endColumnIndex": largura,
+            },
+            "destination": {
+                "sheetId": sheet_id,
+                "startRowIndex": linha_destino - 1,
+                "endRowIndex": linha_destino,
+                "startColumnIndex": 0,
+                "endColumnIndex": largura,
+            },
+            "pasteType": "PASTE_FORMAT",
+            "pasteOrientation": "NORMAL",
+        }
+    }
 
 
 def _padronizar_ordens(df):
