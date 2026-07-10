@@ -1,3 +1,5 @@
+import re
+
 import streamlit as st
 
 
@@ -6,11 +8,31 @@ MANUTENCAO_ATIVA = False
 
 
 def page_link_icon(page, label, icon_path):
-    col_icon, col_link = st.columns([0.16, 0.84], vertical_alignment="center")
-    with col_icon:
-        st.image(icon_path, width=18)
-    with col_link:
-        st.page_link(page, label=label)
+    slug = re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_") or "item"
+    pagina_atual = st.session_state.get("modo_exibicao_pagina_atual", "")
+    ativo = _pagina_ativa(page, pagina_atual)
+    classe = " menu-item-active" if ativo else ""
+    with st.container(key=f"menu_item_{slug}"):
+        st.markdown(f'<div class="menu-item-shell{classe}">', unsafe_allow_html=True)
+        col_icon, col_link = st.columns([0.24, 0.76], vertical_alignment="center")
+        with col_icon:
+            st.image(icon_path, width=34)
+        with col_link:
+            st.page_link(page, label=label)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _pagina_ativa(page, pagina_atual):
+    mapa = {
+        "app.py": "home",
+        "pages/Criar_OP.py": "criar_op",
+        "pages/Producao.py": "producao",
+        "pages/Qualidade.py": "qualidade",
+        "pages/Embalagens.py": "embalagens",
+        "pages/Historico_OP.py": "historico_op",
+        "pages/Dashboard.py": "dashboard",
+    }
+    return mapa.get(page) == pagina_atual
 
 
 def render_menu_lateral():
@@ -236,6 +258,57 @@ def _aplicar_layout_menu(menu_aberto):
         [data-testid="stSidebar"] .sidebar-logo {
             visibility: visible !important;
             opacity: 1 !important;
+        }
+
+        .sidebar-logo {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 10px !important;
+            padding: 18px 16px 22px 16px !important;
+            margin-bottom: 8px !important;
+            border-bottom: 1px solid #e4e4e4 !important;
+        }
+
+        .sidebar-logo img {
+            max-height: 42px !important;
+            width: auto !important;
+            object-fit: contain !important;
+        }
+
+        [data-testid="stSidebar"] div[data-testid="stVerticalBlock"] {
+            gap: 0.15rem !important;
+        }
+
+        [data-testid="stSidebar"] div[data-testid="column"] {
+            padding: 0 !important;
+        }
+
+        [data-testid="stSidebar"] a {
+            display: flex !important;
+            align-items: center !important;
+            min-height: 38px !important;
+            padding: 0 8px !important;
+            color: #000000 !important;
+            font-size: 14px !important;
+            font-weight: 800 !important;
+            text-decoration: none !important;
+            border-radius: 8px !important;
+        }
+
+        [data-testid="stSidebar"] a:hover {
+            background: #eef1f5 !important;
+            color: #000000 !important;
+        }
+
+        [data-testid="stSidebar"] div[class*="st-key-menu_item_"] {
+            margin: 3px 12px !important;
+            padding: 5px 8px !important;
+            border-radius: 8px !important;
+        }
+
+        [data-testid="stSidebar"] div[class*="st-key-menu_item_"]:has(.menu-item-active) {
+            background: #e9edf3 !important;
         }
         """
         if menu_aberto

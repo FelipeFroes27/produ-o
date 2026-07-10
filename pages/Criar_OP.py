@@ -69,10 +69,12 @@ def aplicar_estilo():
 
         .sidebar-logo {
             display: flex;
-            gap: 8px;
+            gap: 10px;
             align-items: center;
             justify-content: center;
-            padding: 8px 0 16px 0;
+            padding: 18px 16px 22px 16px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #e4e4e4;
         }
 
         .sidebar-logo img {
@@ -80,7 +82,7 @@ def aplicar_estilo():
             border: 0;
             border-radius: 0;
             padding: 0;
-            max-height: 24px;
+            max-height: 42px;
             width: auto;
         }
 
@@ -111,53 +113,69 @@ def aplicar_estilo():
             margin-bottom: 0.25rem;
         }
 
-        .erp-panel {
+        .op-shell {
             border: 2px solid #000000;
             border-radius: 8px;
             background: #ffffff;
-            overflow: hidden;
-            margin-top: 8px;
+            padding: 12px;
+            margin-top: 10px;
         }
 
-        .erp-section {
-            border-bottom: 1px solid #000000;
-            background: #f7f7f7;
-            padding: 8px 10px;
+        .op-section-title {
+            border-bottom: 2px solid #000000;
+            padding: 0 0 8px 0;
+            margin: 0 0 10px 0;
             color: #000000;
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 900;
         }
 
-        .erp-row {
-            border-bottom: 1px solid #d0d0d0;
-            padding: 6px 8px;
-            background: #ffffff;
-        }
-
-        .erp-row:last-child {
-            border-bottom: 0;
-        }
-
-        .erp-label {
-            min-height: 38px;
-            display: flex;
-            align-items: center;
-            color: #000000;
-            font-size: 12px;
-            font-weight: 900;
-        }
-
-        .erp-note {
+        .op-hint {
             color: #333333;
             font-size: 12px;
             font-weight: 750;
-            padding: 0 10px 6px 10px;
+            min-height: 18px;
+            margin-top: 2px;
         }
 
-        .erp-action {
-            display: flex;
-            justify-content: flex-end;
-            padding-top: 4px;
+        .op-suggestion-box {
+            border: 2px solid #000000;
+            border-radius: 8px;
+            padding: 10px;
+            background: #fafafa;
+            min-height: 100%;
+        }
+
+        .op-suggestion-title {
+            font-size: 13px;
+            font-weight: 900;
+            margin-bottom: 8px;
+            color: #000000;
+        }
+
+        .op-suggestion-row {
+            display: grid;
+            grid-template-columns: 68px 1fr 52px;
+            gap: 8px;
+            align-items: center;
+            border-top: 1px solid #d8d8d8;
+            padding: 6px 0;
+            font-size: 12px;
+            color: #000000;
+        }
+
+        .op-suggestion-row:first-of-type {
+            border-top: 0;
+        }
+
+        .op-suggestion-row strong {
+            font-size: 12px;
+        }
+
+        .op-suggestion-row span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         div[data-baseweb="input"],
@@ -169,6 +187,7 @@ def aplicar_estilo():
             border-radius: 8px !important;
             box-shadow: none !important;
             min-height: 38px !important;
+            background: #ffffff !important;
         }
 
         button {
@@ -191,7 +210,11 @@ def aplicar_estilo():
         }
 
         div[data-testid="column"] {
-            gap: .25rem !important;
+            gap: .45rem !important;
+        }
+
+        div[data-testid="stVerticalBlock"] {
+            gap: .45rem !important;
         }
         </style>
         """,
@@ -295,18 +318,6 @@ def rotulo_sugestao(item):
     return f"{item['COD_PRODUTO']} | {str(item['PRODUTO'])[:80]} | {numero(item['Ordens'])} ordem(ns)"
 
 
-def linha_inicio(rotulo):
-    st.markdown('<div class="erp-row">', unsafe_allow_html=True)
-    col_label, col_campo = st.columns([0.18, 0.82], vertical_alignment="center")
-    with col_label:
-        st.markdown(f'<div class="erp-label">{rotulo}</div>', unsafe_allow_html=True)
-    return col_campo
-
-
-def linha_fim():
-    st.markdown("</div>", unsafe_allow_html=True)
-
-
 aplicar_estilo()
 render_sidebar()
 
@@ -335,95 +346,96 @@ codigo_atual = st.session_state.get("criar_op_codigo", "")
 produto_encontrado = produto_por_codigo(produtos, codigo_atual)
 sugestoes = sugestoes_itens(ordens)
 
-st.markdown('<div class="erp-panel">', unsafe_allow_html=True)
-st.markdown('<div class="erp-section">Dados da ordem</div>', unsafe_allow_html=True)
+with st.container(border=True):
+    st.markdown('<div class="op-section-title">Dados da ordem</div>', unsafe_allow_html=True)
 
-with linha_inicio("Setor"):
-    col_a, col_b = st.columns([0.32, 0.68])
-    with col_a:
-        aba = st.selectbox("Setor", ABAS_PLANEJAMENTO, key="criar_op_setor", label_visibility="collapsed")
-    with col_b:
-        rotulos_sugestoes = [""] + [rotulo_sugestao(item) for _, item in sugestoes.iterrows()]
-        sugestao = st.selectbox("Atalho por itens frequentes", rotulos_sugestoes, label_visibility="collapsed")
-linha_fim()
+    col_form, col_sugestoes = st.columns([0.72, 0.28], gap="medium")
 
-if sugestao:
-    codigo_sugerido = sugestao.split("|", 1)[0].strip()
-    if codigo_sugerido != str(st.session_state.get("criar_op_codigo", "")).strip():
-        aplicar_sugestao(codigo_sugerido)
+    with col_form:
+        linha1 = st.columns([0.22, 0.16, 0.16, 0.46])
+        with linha1[0]:
+            aba = st.selectbox("Setor", ABAS_PLANEJAMENTO, key="criar_op_setor")
+        with linha1[1]:
+            op_sugerida = proxima_op(ordens, aba)
+            op = st.text_input("N da OP", value=op_sugerida)
+        with linha1[2]:
+            quantidade = st.number_input("Quantidade", min_value=1, value=1, step=1)
+        with linha1[3]:
+            usuarios_lista = [""] + nomes_usuarios(usuarios)
+            responsavel = st.selectbox("Responsavel", usuarios_lista)
 
-op_sugerida = proxima_op(ordens, aba)
+        linha2 = st.columns([0.23, 0.77])
+        with linha2[0]:
+            codigo = st.text_input("Codigo do item", key="criar_op_codigo")
+        produto_encontrado = produto_por_codigo(produtos, codigo)
+        produto_padrao = produto_encontrado["PRODUTO"] if produto_encontrado else ""
+        with linha2[1]:
+            produto = st.text_input(
+                "Descricao do item",
+                value=produto_padrao,
+                disabled=bool(produto_encontrado),
+            )
 
-with linha_inicio("N da OP"):
-    col_a, col_b, col_c = st.columns([0.28, 0.28, 0.44])
-    with col_a:
-        op = st.text_input("N da OP", value=op_sugerida, label_visibility="collapsed")
-    with col_b:
-        quantidade = st.number_input("Quantidade", min_value=1, value=1, step=1, label_visibility="collapsed")
-    with col_c:
-        usuarios_lista = [""] + nomes_usuarios(usuarios)
-        responsavel = st.selectbox("Responsavel", usuarios_lista, label_visibility="collapsed")
-linha_fim()
+        if produto_encontrado:
+            detalhes = []
+            for campo in ["CATEGORIA", "MARCA", "GRUPO"]:
+                valor = str(produto_encontrado.get(campo, "")).strip()
+                if valor:
+                    detalhes.append(f"{campo.title()}: {valor}")
+            info_item = f"Item encontrado: {produto_encontrado['PRODUTO']}"
+            if detalhes:
+                info_item += " | " + " | ".join(detalhes)
+            st.markdown(f'<div class="op-hint">{info_item}</div>', unsafe_allow_html=True)
+        elif codigo:
+            st.warning("Codigo nao encontrado no Bd_produtos. Confira o codigo ou preencha a descricao manualmente.")
+        else:
+            st.markdown(f'<div class="op-hint">Proxima OP sugerida para {aba}: {op_sugerida}</div>', unsafe_allow_html=True)
 
-with linha_inicio("Codigo"):
-    col_a, col_b = st.columns([0.25, 0.75])
-    with col_a:
-        codigo = st.text_input("Codigo do item", key="criar_op_codigo", label_visibility="collapsed")
-    produto_encontrado = produto_por_codigo(produtos, codigo)
-    produto_padrao = produto_encontrado["PRODUTO"] if produto_encontrado else ""
-    with col_b:
-        produto = st.text_input(
-            "Descricao do item",
-            value=produto_padrao,
-            disabled=bool(produto_encontrado),
-            label_visibility="collapsed",
-        )
-linha_fim()
+        linha3 = st.columns([0.22, 0.22, 0.56])
+        with linha3[0]:
+            data_abertura = st.date_input("Data de abertura")
+        with linha3[1]:
+            data_prevista = st.date_input("Data prevista")
+        with linha3[2]:
+            obs = st.text_input("Observacoes")
 
-if produto_encontrado:
-    detalhes = []
-    for campo in ["CATEGORIA", "MARCA", "GRUPO"]:
-        valor = str(produto_encontrado.get(campo, "")).strip()
-        if valor:
-            detalhes.append(f"{campo.title()}: {valor}")
-    info_item = f"Item encontrado: {produto_encontrado['PRODUTO']}"
-    if detalhes:
-        info_item += " | " + " | ".join(detalhes)
-    st.markdown(f'<div class="erp-note">{info_item}</div>', unsafe_allow_html=True)
-elif codigo:
-    st.warning("Codigo nao encontrado no Bd_produtos. Confira o codigo ou preencha a descricao manualmente.")
-else:
-    st.markdown(f'<div class="erp-note">Proxima OP sugerida para {aba}: {op_sugerida}</div>', unsafe_allow_html=True)
+        cod_peca = ""
+        peca = ""
+        qtd_pecas = ""
+        if aba == ABAS_PLANEJAMENTO[2]:
+            st.markdown('<div class="op-section-title" style="margin-top:8px;">Pecas</div>', unsafe_allow_html=True)
+            linha4 = st.columns([0.22, 0.56, 0.22])
+            with linha4[0]:
+                cod_peca = st.text_input("Codigo da peca")
+            with linha4[1]:
+                peca = st.text_input("Descricao da peca")
+            with linha4[2]:
+                qtd_pecas = st.number_input("Qtd. pecas", min_value=0, value=0, step=1)
 
-with linha_inicio("Datas"):
-    col_a, col_b, col_c = st.columns([0.25, 0.25, 0.5])
-    with col_a:
-        data_abertura = st.date_input("Data de abertura", label_visibility="collapsed")
-    with col_b:
-        data_prevista = st.date_input("Data prevista", label_visibility="collapsed")
-    with col_c:
-        obs = st.text_input("Observacoes", label_visibility="collapsed")
-linha_fim()
+    with col_sugestoes:
+        with st.container(border=True):
+            st.markdown('<div class="op-suggestion-title">Itens mais usados</div>', unsafe_allow_html=True)
+            rotulos_sugestoes = [""] + [rotulo_sugestao(item) for _, item in sugestoes.iterrows()]
+            sugestao = st.selectbox("Usar sugestao", rotulos_sugestoes, label_visibility="collapsed")
+            if sugestao:
+                codigo_sugerido = sugestao.split("|", 1)[0].strip()
+                if codigo_sugerido != str(st.session_state.get("criar_op_codigo", "")).strip():
+                    aplicar_sugestao(codigo_sugerido)
+            for _, item in sugestoes.head(5).iterrows():
+                st.markdown(
+                    f"""
+                    <div class="op-suggestion-row">
+                        <strong>{item['COD_PRODUTO']}</strong>
+                        <span title="{item['PRODUTO']}">{item['PRODUTO']}</span>
+                        <strong>{numero(item['Ordens'])} OP</strong>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
-cod_peca = ""
-peca = ""
-qtd_pecas = ""
-if aba == ABAS_PLANEJAMENTO[2]:
-    st.markdown('<div class="erp-section">Pecas</div>', unsafe_allow_html=True)
-    with linha_inicio("Peca"):
-        col_a, col_b, col_c = st.columns([0.25, 0.55, 0.2])
-        with col_a:
-            cod_peca = st.text_input("Codigo da peca", label_visibility="collapsed")
-        with col_b:
-            peca = st.text_input("Descricao da peca", label_visibility="collapsed")
-        with col_c:
-            qtd_pecas = st.number_input("Qtd. pecas", min_value=0, value=0, step=1, label_visibility="collapsed")
-    linha_fim()
-
-st.markdown("</div>", unsafe_allow_html=True)
-acao_col1, acao_col2 = st.columns([0.82, 0.18])
-with acao_col2:
-    confirmar = st.button("Criar ordem", use_container_width=True)
+    acao_col1, acao_col2 = st.columns([0.78, 0.22])
+    with acao_col2:
+        confirmar = st.button("Criar ordem", use_container_width=True)
 
 if confirmar:
     descricao_final = produto_encontrado["PRODUTO"] if produto_encontrado else produto

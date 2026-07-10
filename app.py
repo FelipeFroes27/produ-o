@@ -155,10 +155,12 @@ st.markdown(
 
     .sidebar-logo {
         display: flex;
-        gap: 8px;
+        gap: 10px;
         align-items: center;
         justify-content: center;
-        padding: 8px 0 16px 0;
+        padding: 18px 16px 22px 16px;
+        margin-bottom: 8px;
+        border-bottom: 1px solid #e4e4e4;
     }
 
     .sidebar-logo img {
@@ -166,7 +168,7 @@ st.markdown(
         border: 0;
         border-radius: 0;
         padding: 0;
-        max-height: 24px;
+        max-height: 42px;
         width: auto;
     }
 
