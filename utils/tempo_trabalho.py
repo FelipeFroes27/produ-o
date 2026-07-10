@@ -88,12 +88,15 @@ def intervalos_ativos_por_lancamentos(lancamentos, fim=None):
         data_hora = getattr(linha, "DATA_HORA_DT")
 
         if acao == "INICIO":
-            if inicio_ativo is None:
-                inicio_ativo = data_hora
+            inicio_ativo = data_hora
         elif acao == "PAUSA":
             if inicio_ativo is not None and data_hora > inicio_ativo:
                 intervalos.append((inicio_ativo, data_hora))
             inicio_ativo = None
+        elif acao in ["PARCIAL", "FIM", "APROVADO", "REPROVADO"]:
+            if inicio_ativo is not None and data_hora > inicio_ativo:
+                intervalos.append((inicio_ativo, data_hora))
+            inicio_ativo = data_hora if acao == "PARCIAL" else None
 
     if pd.notna(fim) and inicio_ativo is not None and fim > inicio_ativo:
         intervalos.append((inicio_ativo, fim))
