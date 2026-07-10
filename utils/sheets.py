@@ -339,15 +339,18 @@ def lancar_realizacao(ordem, quantidade_lancada, qualidade=False):
 
     worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(novo_realizado))
     try:
-        registrar_historico(ordem, quantidade_lancada, acao, organizar=False)
+        registros = [{
+            "ordem": ordem,
+            "quantidade": quantidade_lancada,
+            "acao": acao,
+        }]
         if qualidade:
-            registrar_historico(
-                ordem,
-                quantidade_lancada,
-                acao_descritiva("Entrada", "Qualidade"),
-                organizar=False,
-            )
-        organizar_historico()
+            registros.append({
+                "ordem": ordem,
+                "quantidade": quantidade_lancada,
+                "acao": acao_descritiva("Entrada", "Qualidade"),
+            })
+        registrar_historico_lote(registros)
     except Exception as exc:
         try:
             worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(realizado_atual))
@@ -413,6 +416,9 @@ def lancar_pausa_setor(ordem, setor, usuario=""):
         if ultima_acao == "PAUSA":
             raise ValueError(f"Esta etapa de {str(setor).lower()} ja esta pausada.")
         raise ValueError(f"Inicie a etapa de {str(setor).lower()} antes de pausar.")
+    usuario = usuario or ultimo_inicio_ativo_setor_ordem(ordem, setor)
+    if not usuario:
+        raise ValueError(f"Nao foi possivel identificar o usuario que iniciou a etapa de {str(setor).lower()}.")
     registrar_historico(
         ordem,
         0,
@@ -447,7 +453,7 @@ def lancar_inicio_qualidade(ordem, usuario):
     lancar_inicio_setor(ordem, "Qualidade", usuario=usuario)
 
 
-def lancar_pausa_qualidade(ordem, usuario):
+def lancar_pausa_qualidade(ordem, usuario=""):
     lancar_pausa_setor(ordem, "Qualidade", usuario=usuario)
 
 
@@ -496,32 +502,31 @@ def lancar_aprovacao_qualidade(ordem, quantidade_aprovada, avaliador="", embalag
     if quantidade_aprovada > pendente:
         raise ValueError(f"A quantidade aprovada passa do pendente de qualidade ({_formatar_numero(pendente)}).")
 
-    registrar_historico(
-        ordem,
-        quantidade_aprovada,
-        acao_descritiva("Aprovado", "Qualidade"),
-        avaliador=usuario_inicio,
-        usuario_responsavel=usuario_inicio,
-        organizar=False,
-    )
-    registrar_historico(
-        ordem,
-        0,
-        acao_descritiva("Fim", "Qualidade"),
-        avaliador=usuario_inicio,
-        usuario_responsavel=usuario_inicio,
-        organizar=False,
-    )
+    registros = [
+        {
+            "ordem": ordem,
+            "quantidade": quantidade_aprovada,
+            "acao": acao_descritiva("Aprovado", "Qualidade"),
+            "avaliador": usuario_inicio,
+            "usuario_responsavel": usuario_inicio,
+        },
+        {
+            "ordem": ordem,
+            "quantidade": 0,
+            "acao": acao_descritiva("Fim", "Qualidade"),
+            "avaliador": usuario_inicio,
+            "usuario_responsavel": usuario_inicio,
+        },
+    ]
     if embalagem:
-        registrar_historico(
-            ordem,
-            quantidade_aprovada,
-            acao_descritiva("Entrada", "Embalagem"),
-            avaliador=usuario_inicio,
-            usuario_responsavel=usuario_inicio,
-            organizar=False,
-        )
-    organizar_historico()
+        registros.append({
+            "ordem": ordem,
+            "quantidade": quantidade_aprovada,
+            "acao": acao_descritiva("Entrada", "Embalagem"),
+            "avaliador": usuario_inicio,
+            "usuario_responsavel": usuario_inicio,
+        })
+    registrar_historico_lote(registros)
     carregar_historico.clear()
 
 
@@ -554,23 +559,22 @@ def lancar_reprovacao_qualidade(ordem, quantidade_reprovada, avaliador=""):
     worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(novo_realizado))
     try:
         ajustar_historico_reprovacao(ordem, quantidade_reprovada)
-        registrar_historico(
-            ordem,
-            quantidade_reprovada,
-            acao_descritiva("Reprovado", "Qualidade"),
-            avaliador=usuario_inicio,
-            usuario_responsavel=usuario_inicio,
-            organizar=False,
-        )
-        registrar_historico(
-            ordem,
-            0,
-            acao_descritiva("Fim", "Qualidade"),
-            avaliador=usuario_inicio,
-            usuario_responsavel=usuario_inicio,
-            organizar=False,
-        )
-        organizar_historico()
+        registrar_historico_lote([
+            {
+                "ordem": ordem,
+                "quantidade": quantidade_reprovada,
+                "acao": acao_descritiva("Reprovado", "Qualidade"),
+                "avaliador": usuario_inicio,
+                "usuario_responsavel": usuario_inicio,
+            },
+            {
+                "ordem": ordem,
+                "quantidade": 0,
+                "acao": acao_descritiva("Fim", "Qualidade"),
+                "avaliador": usuario_inicio,
+                "usuario_responsavel": usuario_inicio,
+            },
+        ])
     except Exception as exc:
         try:
             worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(realizado_atual))
@@ -837,6 +841,40 @@ def ultima_acao_embalagem_ordem(ordem):
 def registrar_historico(ordem, quantidade_lancada, acao, avaliador="", usuario_responsavel="", organizar=True):
     worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
     headers = worksheet.row_values(1)
+    linha = _montar_linha_historico(headers, ordem, quantidade_lancada, acao, avaliador, usuario_responsavel)
+
+    worksheet.append_row(linha, value_input_option="RAW")
+    if organizar:
+        organizar_historico()
+    carregar_historico.clear()
+
+
+def registrar_historico_lote(registros, organizar=True):
+    registros = [registro for registro in registros if registro]
+    if not registros:
+        return
+
+    worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
+    headers = worksheet.row_values(1)
+    linhas = [
+        _montar_linha_historico(
+            headers,
+            registro.get("ordem", {}),
+            registro.get("quantidade", 0),
+            registro.get("acao", ""),
+            registro.get("avaliador", ""),
+            registro.get("usuario_responsavel", ""),
+        )
+        for registro in registros
+    ]
+
+    worksheet.append_rows(linhas, value_input_option="RAW")
+    if organizar:
+        organizar_historico()
+    carregar_historico.clear()
+
+
+def _montar_linha_historico(headers, ordem, quantidade_lancada, acao, avaliador="", usuario_responsavel=""):
     data_hora = datetime.now(FUSO_BRASILIA).strftime("%d/%m/%Y %H:%M:%S")
     linha = []
 
@@ -865,10 +903,7 @@ def registrar_historico(ordem, quantidade_lancada, acao, avaliador="", usuario_r
         else:
             linha.append("")
 
-    worksheet.append_row(linha, value_input_option="RAW")
-    if organizar:
-        organizar_historico()
-    carregar_historico.clear()
+    return linha
 
 
 def organizar_historico():

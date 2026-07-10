@@ -642,14 +642,10 @@ def modal_inicio_qualidade(ordem, avaliadores):
 @st.dialog("Pausar qualidade", width="large")
 def modal_pausa_qualidade(ordem, avaliadores):
     render_detalhes_ordem(ordem)
-    if not avaliadores:
-        st.error("Nenhum usuario com cargo Qualidade foi encontrado.")
-        return
 
     chave = f"{ordem['ABA_ORIGEM']}_{ordem['OP']}_{ordem['COD_PRODUTO']}_pausa"
     trava = f"qualidade_trava_{chave}"
     with st.form(f"form_{chave}"):
-        usuario = st.selectbox("Usuario da qualidade", avaliadores)
         confirmar = st.form_submit_button(
             "Lancamento em andamento..." if st.session_state.get(trava) else "Confirmar pausa",
             use_container_width=True,
@@ -659,7 +655,7 @@ def modal_pausa_qualidade(ordem, avaliadores):
     if confirmar:
         st.session_state[trava] = True
         try:
-            lancar_pausa_qualidade(ordem, usuario)
+            lancar_pausa_qualidade(ordem)
         except Exception as exc:
             st.session_state.pop(trava, None)
             st.error(str(exc))

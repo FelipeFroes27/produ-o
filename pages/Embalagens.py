@@ -404,6 +404,27 @@ def montar_ordem_embalagem(linha):
     }
 
 
+def montar_ordem_origem_embalagem(origem):
+    return {
+        "USUARIO_RESPONSAVEL": "",
+        "OP": str(origem.get("OP", "")),
+        "COD_PRODUTO": str(origem.get("COD_PRODUTO", "")),
+        "PRODUTO": str(origem.get("PRODUTO", "")),
+        "ABA_ORIGEM": str(origem.get("ABA_ORIGEM", "")),
+        "QUANTIDADE_PENDENTE": float(origem.get("QUANTIDADE_PENDENTE", 0) or 0),
+        "QUANTIDADE_NUM": float(origem.get("QUANTIDADE_PENDENTE", 0) or 0),
+        "REALIZADO_NUM": 0,
+        "SALDO_NUM": 0,
+        "STATUS": "",
+        "OBS": "",
+    }
+
+
+def origens_do_item(item):
+    origens = item.get("ORIGENS_EMBALAGEM", [])
+    return origens if isinstance(origens, list) else []
+
+
 def montar_fila_embalagem(historico):
     colunas = [
         "COD_PRODUTO",
@@ -414,6 +435,7 @@ def montar_fila_embalagem(historico):
         "DATA_HORA_DT",
         "EM_ANDAMENTO",
         "PAUSADA",
+        "ORIGENS_EMBALAGEM",
     ]
     if historico.empty or "ACAO" not in historico.columns:
         return pd.DataFrame(columns=colunas)
@@ -425,6 +447,9 @@ def montar_fila_embalagem(historico):
     dados = dados[dados["CODIGO"].astype(str).str.strip().ne("") | dados["PRODUTO"].astype(str).str.strip().ne("")].copy()
     if dados.empty:
         return pd.DataFrame(columns=colunas)
+    dados = dados.rename(columns={"CODIGO": "COD_PRODUTO", "TIPO": "ABA_ORIGEM"})
+    chaves_origem = ["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO"]
+    chaves_produto = ["COD_PRODUTO", "PRODUTO"]
 
     entradas = (
         dados[
@@ -432,8 +457,7 @@ def montar_fila_embalagem(historico):
             & (dados["ACAO_ETAPA"] == "EMBALAGEM")
             & (dados["QUANTIDADE_NUM"] > 0)
         ]
-        .rename(columns={"CODIGO": "COD_PRODUTO"})
-        .groupby(["COD_PRODUTO", "PRODUTO"], dropna=False)
+        .groupby(chaves_origem, dropna=False)
         .agg(
             QUANTIDADE_SOLICITADA=("QUANTIDADE_NUM", "sum"),
             DATA_HORA_DT=("DATA_HORA_DT", "max"),
@@ -449,41 +473,79 @@ def montar_fila_embalagem(historico):
             & (dados["ACAO_ETAPA"] == "EMBALAGEM")
             & (dados["QUANTIDADE_NUM"] > 0)
         ]
-        .rename(columns={"CODIGO": "COD_PRODUTO"})
-        .groupby(["COD_PRODUTO", "PRODUTO"], dropna=False)
+        .groupby(chaves_origem, dropna=False)
         .agg(QUANTIDADE_EMBALADA=("QUANTIDADE_NUM", "sum"))
         .reset_index()
     )
-    fila = entradas.merge(embaladas, on=["COD_PRODUTO", "PRODUTO"], how="left")
-    fila["QUANTIDADE_EMBALADA"] = fila["QUANTIDADE_EMBALADA"].fillna(0)
-    fila["QUANTIDADE_PENDENTE"] = (fila["QUANTIDADE_SOLICITADA"] - fila["QUANTIDADE_EMBALADA"]).clip(lower=0)
-    fila = fila[fila["QUANTIDADE_PENDENTE"] > 0].copy()
-    if fila.empty:
+    fontes = entradas.merge(embaladas, on=chaves_origem, how="left")
+    fontes["QUANTIDADE_EMBALADA"] = fontes["QUANTIDADE_EMBALADA"].fillna(0)
+    fontes["QUANTIDADE_PENDENTE"] = (fontes["QUANTIDADE_SOLICITADA"] - fontes["QUANTIDADE_EMBALADA"]).clip(lower=0)
+    fontes = fontes[fontes["QUANTIDADE_PENDENTE"] > 0].copy()
+    if fontes.empty:
         return pd.DataFrame(columns=colunas)
 
-    fila["CHAVE_PRODUTO"] = chave_produto(fila)
     controles = dados[
         dados["ACAO_NORM"].isin(["INICIO", "PAUSA", "FIM"])
         & (dados["ACAO_ETAPA"] == "EMBALAGEM")
         & dados["DATA_HORA_DT"].notna()
-    ].rename(columns={"CODIGO": "COD_PRODUTO"}).copy()
+    ].copy()
     if not controles.empty:
-        controles["CHAVE_PRODUTO"] = chave_produto(controles)
+        controles["CHAVE_ORIGEM"] = controles[chaves_origem].fillna("").astype(str).apply(
+            lambda linha: "|".join(chave_texto(valor) for valor in linha),
+            axis=1,
+        )
+        fontes["CHAVE_ORIGEM"] = fontes[chaves_origem].fillna("").astype(str).apply(
+            lambda linha: "|".join(chave_texto(valor) for valor in linha),
+            axis=1,
+        )
         ultima = (
             controles.sort_values("DATA_HORA_DT", kind="mergesort")
-            .groupby("CHAVE_PRODUTO", dropna=False)["ACAO_NORM"]
+            .groupby("CHAVE_ORIGEM", dropna=False)["ACAO_NORM"]
             .last()
             .to_dict()
         )
-        fila["ULTIMA_ACAO_EMBALAGEM"] = fila["CHAVE_PRODUTO"].map(ultima).fillna("")
-        fila["EM_ANDAMENTO"] = fila["ULTIMA_ACAO_EMBALAGEM"] == "INICIO"
-        fila["PAUSADA"] = fila["ULTIMA_ACAO_EMBALAGEM"] == "PAUSA"
+        fontes["ULTIMA_ACAO_EMBALAGEM"] = fontes["CHAVE_ORIGEM"].map(ultima).fillna("")
     else:
-        fila["EM_ANDAMENTO"] = False
-        fila["PAUSADA"] = False
+        fontes["ULTIMA_ACAO_EMBALAGEM"] = ""
 
+    fila = (
+        fontes.groupby(chaves_produto, dropna=False)
+        .agg(
+            QUANTIDADE_SOLICITADA=("QUANTIDADE_SOLICITADA", "sum"),
+            QUANTIDADE_EMBALADA=("QUANTIDADE_EMBALADA", "sum"),
+            QUANTIDADE_PENDENTE=("QUANTIDADE_PENDENTE", "sum"),
+            DATA_HORA_DT=("DATA_HORA_DT", "max"),
+        )
+        .reset_index()
+    )
+    origens = (
+        fontes.sort_values(["DATA_HORA_DT", "ABA_ORIGEM", "OP"], kind="mergesort")
+        .groupby(chaves_produto, dropna=False)
+        .apply(lambda grupo: grupo[chaves_origem + [
+            "QUANTIDADE_PENDENTE",
+            "QUANTIDADE_SOLICITADA",
+            "QUANTIDADE_EMBALADA",
+            "DATA_HORA_DT",
+            "ULTIMA_ACAO_EMBALAGEM",
+        ]].to_dict("records"))
+        .rename("ORIGENS_EMBALAGEM")
+        .reset_index()
+    )
+    status = (
+        fontes.assign(
+            EM_ANDAMENTO_FONTE=fontes["ULTIMA_ACAO_EMBALAGEM"] == "INICIO",
+            PAUSADA_FONTE=fontes["ULTIMA_ACAO_EMBALAGEM"] == "PAUSA",
+        )
+        .groupby(chaves_produto, dropna=False)
+        .agg(
+            EM_ANDAMENTO=("EM_ANDAMENTO_FONTE", "any"),
+            PAUSADA=("PAUSADA_FONTE", "any"),
+        )
+        .reset_index()
+    )
+    fila = fila.merge(origens, on=chaves_produto, how="left").merge(status, on=chaves_produto, how="left")
     fila["EM_ANDAMENTO"] = fila["EM_ANDAMENTO"].fillna(False).astype(bool)
-    fila["PAUSADA"] = fila["PAUSADA"].fillna(False).astype(bool)
+    fila["PAUSADA"] = (~fila["EM_ANDAMENTO"] & fila["PAUSADA"].fillna(False)).astype(bool)
     return fila[colunas].sort_values(["DATA_HORA_DT", "PRODUTO"], ascending=[True, True])
 
 
@@ -538,7 +600,15 @@ def modal_inicio_embalagem(item, usuarios):
         st.error("Nenhum usuario foi encontrado na aba Usuarios.")
         return
 
-    ordem = montar_ordem_embalagem(item)
+    origens = [
+        origem for origem in origens_do_item(item)
+        if float(origem.get("QUANTIDADE_PENDENTE", 0) or 0) > 0
+        and str(origem.get("ULTIMA_ACAO_EMBALAGEM", "")).upper() != "INICIO"
+    ]
+    if not origens:
+        st.error("Este item ja esta em andamento na embalagem.")
+        return
+
     chave = chave_css_texto(item["COD_PRODUTO"], item["PRODUTO"], "inicio")
     trava = f"embalagem_trava_{chave}"
     with st.form(f"form_{chave}"):
@@ -552,7 +622,8 @@ def modal_inicio_embalagem(item, usuarios):
     if confirmar:
         st.session_state[trava] = True
         try:
-            lancar_inicio_embalagem(ordem, usuario=usuario)
+            for origem in origens:
+                lancar_inicio_embalagem(montar_ordem_origem_embalagem(origem), usuario=usuario)
         except Exception as exc:
             st.session_state.pop(trava, None)
             st.error(str(exc))
@@ -564,15 +635,18 @@ def modal_inicio_embalagem(item, usuarios):
 @st.dialog("Pausar embalagem", width="large")
 def modal_pausa_embalagem(item, usuarios):
     render_detalhes_item(item)
-    if not usuarios:
-        st.error("Nenhum usuario foi encontrado na aba Usuarios.")
+
+    origens = [
+        origem for origem in origens_do_item(item)
+        if str(origem.get("ULTIMA_ACAO_EMBALAGEM", "")).upper() == "INICIO"
+    ]
+    if not origens:
+        st.error("Este item nao possui embalagem em andamento para pausar.")
         return
 
-    ordem = montar_ordem_embalagem(item)
     chave = chave_css_texto(item["COD_PRODUTO"], item["PRODUTO"], "pausa")
     trava = f"embalagem_trava_{chave}"
     with st.form(f"form_{chave}"):
-        usuario = st.selectbox("Usuario da embalagem", usuarios)
         confirmar = st.form_submit_button(
             "Lancamento em andamento..." if st.session_state.get(trava) else "Confirmar pausa",
             use_container_width=True,
@@ -582,7 +656,8 @@ def modal_pausa_embalagem(item, usuarios):
     if confirmar:
         st.session_state[trava] = True
         try:
-            lancar_pausa_embalagem(ordem, usuario=usuario)
+            for origem in origens:
+                lancar_pausa_embalagem(montar_ordem_origem_embalagem(origem))
         except Exception as exc:
             st.session_state.pop(trava, None)
             st.error(str(exc))
@@ -598,15 +673,24 @@ def modal_conclusao(item, usuarios):
         st.error("Inicie a embalagem antes de concluir.")
         return
 
-    ordem = montar_ordem_embalagem(item)
+    origens_ativas = [
+        origem for origem in origens_do_item(item)
+        if str(origem.get("ULTIMA_ACAO_EMBALAGEM", "")).upper() == "INICIO"
+        and float(origem.get("QUANTIDADE_PENDENTE", 0) or 0) > 0
+    ]
+    if not origens_ativas:
+        st.error("Nao foi encontrada nenhuma OP iniciada para receber a embalagem.")
+        return
+
     chave = chave_css_texto(item["COD_PRODUTO"], item["PRODUTO"], "conclusao")
     trava = f"embalagem_trava_{chave}"
+    maximo_ativo = max(1, inteiro(sum(float(origem.get("QUANTIDADE_PENDENTE", 0) or 0) for origem in origens_ativas)))
     with st.form(f"form_{chave}"):
         quantidade = st.number_input(
             "Quantidade embalada",
             min_value=1,
-            max_value=max(1, inteiro(item["QUANTIDADE_PENDENTE"])),
-            value=max(1, inteiro(item["QUANTIDADE_PENDENTE"])),
+            max_value=maximo_ativo,
+            value=maximo_ativo,
             step=1,
         )
         confirmar = st.form_submit_button(
@@ -617,7 +701,17 @@ def modal_conclusao(item, usuarios):
     if confirmar:
         st.session_state[trava] = True
         try:
-            lancar_conclusao_embalagem(ordem, quantidade)
+            restante = float(quantidade)
+            for origem in origens_ativas:
+                if restante <= 0:
+                    break
+                quantidade_origem = min(float(origem.get("QUANTIDADE_PENDENTE", 0) or 0), restante)
+                if quantidade_origem <= 0:
+                    continue
+                lancar_conclusao_embalagem(montar_ordem_origem_embalagem(origem), quantidade_origem)
+                restante -= quantidade_origem
+            if restante > 0:
+                raise ValueError("A quantidade passa do total iniciado para embalagem.")
         except Exception as exc:
             st.session_state.pop(trava, None)
             st.error(str(exc))
@@ -634,7 +728,6 @@ def render_card_embalagem(item, usuarios):
     em_andamento = bool(item.get("EM_ANDAMENTO", False))
     pausada = bool(item.get("PAUSADA", False))
     status_fluxo = "Pausado" if pausada else "Em andamento" if em_andamento else "Aguardando inicio"
-    ordem = montar_ordem_embalagem(item)
 
     with st.container(border=True, key=f"embalagem_{chave_css}"):
         col_info, col_qtd, col_acoes = st.columns([6.6, .85, 1.8], vertical_alignment="center")
@@ -702,7 +795,7 @@ def opcoes_encaminhamento(ordens, historico):
     dados["ACAO_ETAPA"] = dados["ACAO"].map(acao_etapa_historico)
     dados["QUANTIDADE_NUM"] = pd.to_numeric(dados["QUANTIDADE_NUM"], errors="coerce").fillna(0)
     dados = dados.rename(columns={"CODIGO": "COD_PRODUTO", "TIPO": "ABA_ORIGEM"})
-    chaves = ["COD_PRODUTO", "PRODUTO"]
+    chaves = ["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO"]
 
     aprovadas = (
         dados[
@@ -738,14 +831,12 @@ def opcoes_encaminhamento(ordens, historico):
     if base.empty:
         return base
 
-    base["ABA_ORIGEM"] = "Embalagem"
-    base["OP"] = ""
     base["USUARIO_RESPONSAVEL"] = ""
     base["ROTULO_EMBALAGEM"] = base.apply(
-        lambda linha: f"{linha['COD_PRODUTO']} | {str(linha['PRODUTO'])[:100]}",
+        lambda linha: f"{linha['ABA_ORIGEM']} | OP {linha['OP']} | {linha['COD_PRODUTO']} | {str(linha['PRODUTO'])[:80]}",
         axis=1,
     )
-    return base.sort_values(["COD_PRODUTO", "PRODUTO"])
+    return base.sort_values(["ABA_ORIGEM", "OP", "COD_PRODUTO", "PRODUTO"])
 
 
 def render_puxar_ordem_embalagem(ordens, historico):
