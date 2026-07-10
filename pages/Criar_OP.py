@@ -1,5 +1,3 @@
-from html import escape
-
 import pandas as pd
 import streamlit as st
 
@@ -65,8 +63,8 @@ def aplicar_estilo():
         .block-container,
         [data-testid="stMainBlockContainer"] {
             max-width: 1480px;
-            padding-top: .45rem;
-            padding-bottom: 1.25rem;
+            padding-top: .25rem;
+            padding-bottom: .7rem;
         }
 
         .sidebar-logo {
@@ -91,66 +89,37 @@ def aplicar_estilo():
             align-items: flex-end;
             justify-content: space-between;
             gap: .3cm;
-            margin: 0 0 .3cm 0;
+            margin: 0 0 10px 0;
         }
 
         .page-head h1 {
             margin: 0;
             color: #000000;
-            font-size: 34px;
+            font-size: 24px;
             line-height: 1.1;
             font-weight: 900;
         }
 
         .page-head p {
-            margin: 8px 0 0 0;
+            margin: 4px 0 0 0;
             color: #333333;
-            font-size: 14px;
+            font-size: 12px;
             line-height: 1.35;
         }
 
-        .suggestion-grid {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: .3cm;
-            margin-bottom: .3cm;
-        }
-
-        .suggestion-card {
-            border: 2px solid #000000;
-            border-radius: 8px;
-            padding: 12px;
-            min-height: 88px;
-            background: #ffffff;
-        }
-
-        .suggestion-code {
-            font-size: 12px;
-            color: #333333;
-            font-weight: 850;
-        }
-
-        .suggestion-name {
-            margin-top: 6px;
-            color: #000000;
-            font-size: 14px;
-            line-height: 1.2;
-            font-weight: 850;
-            overflow-wrap: anywhere;
-        }
-
-        .suggestion-count {
-            margin-top: 7px;
-            color: #333333;
-            font-size: 12px;
-            font-weight: 700;
+        div[data-testid="stMarkdownContainer"] p {
+            margin-bottom: 0.25rem;
         }
 
         div[data-testid="stForm"] {
             border: 2px solid #000000;
             border-radius: 8px;
-            padding: 18px;
+            padding: 12px 14px 10px 14px;
             background: #ffffff;
+        }
+
+        div[data-testid="stForm"] > div {
+            gap: .45rem !important;
         }
 
         div[data-baseweb="input"],
@@ -161,6 +130,7 @@ def aplicar_estilo():
             border: 2px solid #000000 !important;
             border-radius: 8px !important;
             box-shadow: none !important;
+            min-height: 38px !important;
         }
 
         button {
@@ -171,10 +141,15 @@ def aplicar_estilo():
             font-weight: 800 !important;
         }
 
-        @media (max-width: 1100px) {
-            .suggestion-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
+        label, [data-testid="stWidgetLabel"] p {
+            font-size: 12px !important;
+            font-weight: 800 !important;
+            margin-bottom: 2px !important;
+        }
+
+        [data-testid="stAlert"] {
+            padding: 6px 10px !important;
+            margin: 4px 0 !important;
         }
         </style>
         """,
@@ -274,6 +249,10 @@ def aplicar_sugestao(codigo):
     st.rerun()
 
 
+def rotulo_sugestao(item):
+    return f"{item['COD_PRODUTO']} | {str(item['PRODUTO'])[:80]} | {numero(item['Ordens'])} ordem(ns)"
+
+
 aplicar_estilo()
 render_sidebar()
 
@@ -282,7 +261,7 @@ st.markdown(
     <div class="page-head">
         <div>
             <h1>Criar OP</h1>
-            <p>Cadastro de novas ordens diretamente no planejamento, mantendo blocos semanais e linhas de separacao.</p>
+            <p>Cadastro direto no planejamento, mantendo blocos semanais e linhas de separacao.</p>
         </div>
     </div>
     """,
@@ -298,33 +277,25 @@ except Exception as exc:
     st.caption(str(exc))
     st.stop()
 
-sugestoes = sugestoes_itens(ordens)
-if not sugestoes.empty:
-    st.markdown("**Sugestoes pelos itens mais usados**")
-    cols = st.columns(4)
-    for indice, item in sugestoes.iterrows():
-        col = cols[int(indice) % 4]
-        with col:
-            st.markdown(
-                f"""
-                <div class="suggestion-card">
-                    <div class="suggestion-code">Cod. {escape(str(item["COD_PRODUTO"]))}</div>
-                    <div class="suggestion-name">{escape(str(item["PRODUTO"]))}</div>
-                    <div class="suggestion-count">{escape(numero(item["Ordens"]))} ordem(ns)</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            if st.button("Usar item", key=f"sugestao_{item['COD_PRODUTO']}_{indice}", use_container_width=True):
-                aplicar_sugestao(item["COD_PRODUTO"])
-
 codigo_atual = st.session_state.get("criar_op_codigo", "")
 produto_encontrado = produto_por_codigo(produtos, codigo_atual)
-aba = st.selectbox("Setor", ABAS_PLANEJAMENTO, key="criar_op_setor")
-op_sugerida = proxima_op(ordens, aba)
-st.caption(f"Proxima OP sugerida para {aba}: {op_sugerida}")
+sugestoes = sugestoes_itens(ordens)
 
-codigo = st.text_input("Codigo do item", key="criar_op_codigo")
+topo1, topo2, topo3 = st.columns([1, 2.2, 1.1])
+with topo1:
+    aba = st.selectbox("Setor", ABAS_PLANEJAMENTO, key="criar_op_setor")
+with topo2:
+    rotulos_sugestoes = [""] + [rotulo_sugestao(item) for _, item in sugestoes.iterrows()]
+    sugestao = st.selectbox("Atalho por itens frequentes", rotulos_sugestoes)
+with topo3:
+    codigo = st.text_input("Codigo do item", key="criar_op_codigo")
+
+if sugestao:
+    codigo_sugerido = sugestao.split("|", 1)[0].strip()
+    if codigo_sugerido != str(st.session_state.get("criar_op_codigo", "")).strip():
+        aplicar_sugestao(codigo_sugerido)
+
+op_sugerida = proxima_op(ordens, aba)
 produto_encontrado = produto_por_codigo(produtos, codigo)
 if produto_encontrado:
     detalhes = []
@@ -332,21 +303,26 @@ if produto_encontrado:
         valor = str(produto_encontrado.get(campo, "")).strip()
         if valor:
             detalhes.append(f"{campo.title()}: {valor}")
-    st.success(f"Item encontrado: {produto_encontrado['PRODUTO']}")
+    info_item = f"Item encontrado: {produto_encontrado['PRODUTO']}"
     if detalhes:
-        st.caption(" | ".join(detalhes))
+        info_item += " | " + " | ".join(detalhes)
+    st.caption(info_item)
 elif codigo:
     st.warning("Codigo nao encontrado no Bd_produtos. Confira o codigo ou preencha a descricao manualmente.")
+else:
+    st.caption(f"Proxima OP sugerida para {aba}: {op_sugerida}")
 
 with st.form("form_criar_op"):
-    st.markdown("**Dados da ordem**")
-    col1, col2, col3 = st.columns([1, 1, 1])
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
     with col1:
         st.text_input("Setor selecionado", value=aba, disabled=True)
     with col2:
         op = st.text_input("N da OP", value=op_sugerida)
     with col3:
         quantidade = st.number_input("Quantidade", min_value=1, value=1, step=1)
+    with col4:
+        usuarios_lista = [""] + nomes_usuarios(usuarios)
+        responsavel = st.selectbox("Responsavel", usuarios_lista)
 
     produto_padrao = produto_encontrado["PRODUTO"] if produto_encontrado else ""
     produto = st.text_input(
@@ -355,22 +331,18 @@ with st.form("form_criar_op"):
         disabled=bool(produto_encontrado),
     )
 
-    col6, col7, col8 = st.columns([1, 1, 1])
+    col6, col7, col8 = st.columns([1, 1, 2])
     with col6:
         data_abertura = st.date_input("Data de abertura")
     with col7:
         data_prevista = st.date_input("Data prevista")
     with col8:
-        usuarios_lista = [""] + nomes_usuarios(usuarios)
-        responsavel = st.selectbox("Responsavel", usuarios_lista)
-
-    obs = st.text_area("Observacoes", height=92)
+        obs = st.text_input("Observacoes")
 
     cod_peca = ""
     peca = ""
     qtd_pecas = ""
     if aba == ABAS_PLANEJAMENTO[2]:
-        st.markdown("**Dados de pecas**")
         col9, col10, col11 = st.columns([1, 2, 1])
         with col9:
             cod_peca = st.text_input("Codigo da peca")
