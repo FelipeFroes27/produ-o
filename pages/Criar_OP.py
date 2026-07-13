@@ -525,6 +525,12 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+if st.button("Atualizar dados", use_container_width=False, key="criar_op_atualizar"):
+    carregar_bd_produtos.clear()
+    carregar_ordens.clear()
+    carregar_usuarios.clear()
+    st.rerun()
+
 try:
     produtos = carregar_bd_produtos()
     ordens = carregar_ordens()
