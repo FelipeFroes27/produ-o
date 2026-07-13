@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from utils.display_mode import ativar_modo_exibicao, page_link_icon, render_menu_lateral
+from utils.display_mode import ativar_modo_exibicao, page_link_icon, render_menu_lateral, render_sidebar_brand
 from utils.sheets import _normalizar, acao_base_historico, acao_etapa_historico, carregar_historico, carregar_ordens, carregar_resumo, carregar_usuarios, lancar_inicio_ordem, lancar_pausa_ordem, lancar_realizacao
 
 
@@ -558,12 +558,9 @@ def aplicar_estilo():
 
 def render_sidebar():
     with st.sidebar:
-        st.markdown('<div class="sidebar-logo">', unsafe_allow_html=True)
-        st.image("icones/Logo Branco.bmp", width=72)
-        st.image("icones/logo preto goper.png", width=32)
-        st.markdown("</div>", unsafe_allow_html=True)
+        render_sidebar_brand()
         page_link_icon("app.py", "Inicio", "icones/logo preto goper.png")
-        page_link_icon("pages/Criar_OP.py", "Criar OP", "icones/producao.png")
+        page_link_icon("pages/Criar_OP.py", "Criar OP", "icones/nova_ordem.png")
         page_link_icon("pages/Producao.py", "Producao", "icones/producao.png")
         page_link_icon("pages/Qualidade.py", "Qualidade", "icones/qualidade.png")
         page_link_icon("pages/Embalagens.py", "Embalagens", "icones/embalagem.png")

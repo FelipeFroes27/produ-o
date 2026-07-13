@@ -1,4 +1,6 @@
+import base64
 import re
+from pathlib import Path
 
 import streamlit as st
 
@@ -20,6 +22,28 @@ def page_link_icon(page, label, icon_path):
         with col_link:
             st.page_link(page, label=label)
         st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_sidebar_brand():
+    logo_trendx = _imagem_base64("icones/Logo Branco.bmp")
+    logo_goper = _imagem_base64("icones/logo preto goper.png")
+    st.markdown(
+        f"""
+        <div class="sidebar-brand">
+            <img src="{logo_trendx}" alt="Trendx">
+            <span class="sidebar-brand-divider"></span>
+            <img src="{logo_goper}" alt="Goper">
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _imagem_base64(caminho):
+    caminho = Path(caminho)
+    tipo = "image/bmp" if caminho.suffix.lower() == ".bmp" else "image/png"
+    dados = base64.b64encode(caminho.read_bytes()).decode("utf-8")
+    return f"data:{tipo};base64,{dados}"
 
 
 def _pagina_ativa(page, pagina_atual):
@@ -255,12 +279,14 @@ def _aplicar_layout_menu(menu_aberto):
         [data-testid="stSidebar"] a,
         [data-testid="stSidebar"] p,
         [data-testid="stSidebar"] span,
-        [data-testid="stSidebar"] .sidebar-logo {
+        [data-testid="stSidebar"] .sidebar-logo,
+        [data-testid="stSidebar"] .sidebar-brand {
             visibility: visible !important;
             opacity: 1 !important;
         }
 
-        .sidebar-logo {
+        .sidebar-logo,
+        .sidebar-brand {
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
@@ -270,8 +296,22 @@ def _aplicar_layout_menu(menu_aberto):
             border-bottom: 1px solid #e4e4e4 !important;
         }
 
+        .sidebar-brand img {
+            height: 34px !important;
+            width: auto !important;
+            object-fit: contain !important;
+            display: block !important;
+        }
+
+        .sidebar-brand-divider {
+            width: 1px !important;
+            height: 28px !important;
+            background: #e4e4e4 !important;
+            display: inline-block !important;
+        }
+
         .sidebar-logo img {
-            max-height: 42px !important;
+            max-height: 34px !important;
             width: auto !important;
             object-fit: contain !important;
         }
