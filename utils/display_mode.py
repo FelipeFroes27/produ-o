@@ -123,8 +123,8 @@ def _render_manutencao():
         </style>
         <div class="maintenance-wrap">
             <div class="maintenance-box">
-                <h1>Em manutencao</h1>
-                <p>Todas as ordens em processo serao pausadas e retornarao automaticamente.</p>
+                <h1>Em manutenção</h1>
+                <p>Todas as ordens em processo serão pausadas e retornarão automaticamente.</p>
             </div>
         </div>
         """,

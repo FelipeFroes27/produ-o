@@ -296,7 +296,7 @@ def render_sidebar():
         render_sidebar_brand()
         page_link_icon("app.py", "Inicio", "icones/logo preto goper.png")
         page_link_icon("pages/Criar_OP.py", "Criar OP", "icones/nova_ordem.png")
-        page_link_icon("pages/Producao.py", "Producao", "icones/producao.png")
+        page_link_icon("pages/Producao.py", "Produção", "icones/producao.png")
         page_link_icon("pages/Qualidade.py", "Qualidade", "icones/qualidade.png")
         page_link_icon("pages/Embalagens.py", "Embalagens", "icones/embalagem.png")
         page_link_icon("pages/Historico_OP.py", "Histórico OP", "icones/historico.png")
@@ -567,8 +567,8 @@ def render_detalhes_ordem(ordem):
                 <div class="detail-value">{escape(str(ordem["OP"]) or "Sem OP")}</div>
             </div>
             <div class="detail-box">
-                <div class="detail-label">Codigo</div>
-                <div class="detail-value">{escape(str(ordem["COD_PRODUTO"]) or "Sem codigo")}</div>
+                <div class="detail-label">Código</div>
+                <div class="detail-value">{escape(str(ordem["COD_PRODUTO"]) or "Sem código")}</div>
             </div>
             <div class="detail-box">
                 <div class="detail-label">Responsavel</div>
@@ -615,15 +615,15 @@ def modal_informacao(ordem):
 def modal_inicio_qualidade(ordem, avaliadores):
     render_detalhes_ordem(ordem)
     if not avaliadores:
-        st.error("Nenhum usuario com cargo Qualidade foi encontrado.")
+        st.error("Nenhum usuário com cargo Qualidade foi encontrado.")
         return
 
     chave = f"{ordem['ABA_ORIGEM']}_{ordem['OP']}_{ordem['COD_PRODUTO']}_inicio"
     trava = f"qualidade_trava_{chave}"
     with st.form(f"form_{chave}"):
-        usuario = st.selectbox("Usuario da qualidade", avaliadores)
+        usuario = st.selectbox("Usuário da qualidade", avaliadores)
         confirmar = st.form_submit_button(
-            "Lancamento em andamento..." if st.session_state.get(trava) else "Confirmar inicio",
+            "Lançamento em andamento..." if st.session_state.get(trava) else "Confirmar início",
             use_container_width=True,
             disabled=bool(st.session_state.get(trava, False)),
         )
@@ -648,7 +648,7 @@ def modal_pausa_qualidade(ordem, avaliadores):
     trava = f"qualidade_trava_{chave}"
     with st.form(f"form_{chave}"):
         confirmar = st.form_submit_button(
-            "Lancamento em andamento..." if st.session_state.get(trava) else "Confirmar pausa",
+            "Lançamento em andamento..." if st.session_state.get(trava) else "Confirmar pausa",
             use_container_width=True,
             disabled=bool(st.session_state.get(trava, False)),
         )
@@ -688,7 +688,7 @@ def modal_aprovacao(ordem):
             help="Encaminha a quantidade aprovada para a fila de embalagem.",
         )
         confirmar = st.form_submit_button(
-            "Aprovacao em andamento..." if st.session_state.get(trava) else "Confirmar aprovacao",
+            "Aprovação em andamento..." if st.session_state.get(trava) else "Confirmar aprovação",
             use_container_width=True,
             disabled=bool(st.session_state.get(trava, False)),
         )
@@ -702,7 +702,7 @@ def modal_aprovacao(ordem):
             st.error(str(exc))
         else:
             st.session_state.pop(trava, None)
-            st.success("Aprovacao registrada no historico.")
+            st.success("Aprovação registrada no histórico.")
             st.rerun()
 
 
@@ -713,12 +713,12 @@ def modal_reprovacao(ordem):
         st.error("Inicie a qualidade antes de reprovar.")
         return
     if not bool(ordem.get("TEM_ORDEM", False)):
-        st.error("Nao foi possivel localizar a linha da ordem na programacao atual para subtrair o realizado.")
+        st.error("Não foi possível localizar a linha da ordem na programação atual para subtrair o realizado.")
         return
 
     maximo = min(inteiro(ordem["QUANTIDADE_PENDENTE"]), inteiro(ordem["REALIZADO_NUM"]))
     if maximo <= 0:
-        st.error("Esta ordem nao possui realizado suficiente para reprovar.")
+        st.error("Esta ordem não possui realizado suficiente para reprovar.")
         return
 
     chave = f"{ordem['ABA_ORIGEM']}_{ordem['OP']}_{ordem['COD_PRODUTO']}_reprovacao"
@@ -732,7 +732,7 @@ def modal_reprovacao(ordem):
             step=1,
         )
         confirmar = st.form_submit_button(
-            "Reprovacao em andamento..." if st.session_state.get(trava) else "Confirmar reprovacao",
+            "Reprovação em andamento..." if st.session_state.get(trava) else "Confirmar reprovação",
             use_container_width=True,
             disabled=bool(st.session_state.get(trava, False)),
         )
@@ -746,19 +746,19 @@ def modal_reprovacao(ordem):
             st.error(str(exc))
         else:
             st.session_state.pop(trava, None)
-            st.success("Reprovacao registrada e realizado ajustado na ordem.")
+            st.success("Reprovação registrada e realizado ajustado na ordem.")
             st.rerun()
 
 
 def render_card_qualidade(linha, avaliadores):
     chave_css = chave_css_texto(linha["ABA_ORIGEM"], linha["OP"], linha["COD_PRODUTO"], linha["USUARIO_RESPONSAVEL"])
     key_card = f"qualidade_{chave_css}"
-    produto = str(linha["PRODUTO"]) or "Produto sem descricao"
+    produto = str(linha["PRODUTO"]) or "Produto sem descrição"
     op = str(linha["OP"]) or "Sem OP"
-    codigo = str(linha["COD_PRODUTO"]) or "Sem codigo"
+    codigo = str(linha["COD_PRODUTO"]) or "Sem código"
     em_andamento = bool(linha.get("EM_ANDAMENTO", False))
     pausada = bool(linha.get("PAUSADA", False))
-    status_fluxo = "Pausado" if pausada else "Em andamento" if em_andamento else "Aguardando inicio"
+    status_fluxo = "Pausado" if pausada else "Em andamento" if em_andamento else "Aguardando início"
 
     aplicar_estilo_card_fluxo(key_card)
     with st.container(border=True, key=key_card):
@@ -769,7 +769,7 @@ def render_card_qualidade(linha, avaliadores):
                 <div class="quality-card">
                     <div class="order-name" title="{escape(produto)}">Ordem - {escape(op)} | {escape(produto)}</div>
                     <span class="order-meta">
-                        {escape(str(linha["ABA_ORIGEM"]))} | Cod. {escape(codigo)} | Responsavel {escape(str(linha["USUARIO_RESPONSAVEL"]))} | {escape(resumo_prazo(linha))}
+                        {escape(str(linha["ABA_ORIGEM"]))} | Cod. {escape(codigo)} | Responsável {escape(str(linha["USUARIO_RESPONSAVEL"]))} | {escape(resumo_prazo(linha))}
                     </span>
                     <div class="order-badges">
                         <span class="order-badge">Pendente qualidade {escape(numero(linha["QUANTIDADE_PENDENTE"]))}</span>
@@ -799,7 +799,7 @@ def render_card_qualidade(linha, avaliadores):
                 aplicar_icone_botao(key, ICONES_BOTOES["inicio"])
                 desabilitado = (em_andamento and not pausada) or bool(st.session_state.get(trava, False))
                 texto = "Retomar" if pausada else "Iniciar"
-                if st.button(texto, key=key, help="Registrar inicio/retomada da qualidade", disabled=desabilitado):
+                if st.button(texto, key=key, help="Registrar início/retomada da qualidade", disabled=desabilitado):
                     modal_inicio_qualidade(linha, avaliadores)
             with acao_2:
                 key = f"pausar_{chave_css}"
@@ -817,7 +817,7 @@ def render_card_qualidade(linha, avaliadores):
             with acao_4:
                 key = f"consulta_{chave_css}"
                 aplicar_icone_botao(key, ICONES_BOTOES["consulta"])
-                if st.button("Informacao", key=key, help="Consultar ordem"):
+                if st.button("Informação", key=key, help="Consultar ordem"):
                     modal_informacao(linha)
             with acao_5:
                 key = f"reprovar_{chave_css}"
@@ -986,7 +986,7 @@ st.markdown(
     <div class="page-head">
         <div>
             <h1>Qualidade</h1>
-            <p>Ordens enviadas para aprovacao ou reprovacao da qualidade.</p>
+            <p>Ordens enviadas para aprovação ou reprovação da qualidade.</p>
         </div>
         <div class="page-logos">
             <img src="data:image/bmp;base64,{logo_branco}" alt="Trendx">
@@ -1003,7 +1003,7 @@ try:
     ordens = carregar_ordens()
     historico = carregar_historico()
 except Exception as exc:
-    st.error("Nao foi possivel carregar os dados da qualidade.")
+    st.error("Não foi possível carregar os dados da qualidade.")
     st.caption(str(exc))
     st.stop()
 
@@ -1013,7 +1013,7 @@ fila = montar_fila_qualidade(historico, ordens)
 f1, f2 = st.columns([5.6, 1], vertical_alignment="bottom")
 with f1:
     if not avaliadores:
-        st.warning("Nenhum usuario com cargo Qualidade foi encontrado na aba Usuarios.")
+        st.warning("Nenhum usuário com cargo Qualidade foi encontrado na aba Usuários.")
 with f2:
     if st.button("Atualizar", key="qualidade_atualizar", use_container_width=True):
         carregar_usuarios.clear()
@@ -1023,7 +1023,7 @@ with f2:
 
 k1, k2, k3 = st.columns(3)
 with k1:
-    render_kpi("Ordens na qualidade", len(fila), "Lancamentos aguardando avaliacao")
+    render_kpi("Ordens na qualidade", len(fila), "Lançamentos aguardando avaliação")
 with k2:
     render_kpi("Qtd. pendente", numero(fila["QUANTIDADE_PENDENTE"].sum() if not fila.empty else 0), "Total aguardando qualidade")
 with k3:

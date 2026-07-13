@@ -532,7 +532,7 @@ def render_sidebar():
         render_sidebar_brand()
         page_link_icon("app.py", "Inicio", "icones/logo preto goper.png")
         page_link_icon("pages/Criar_OP.py", "Criar OP", "icones/nova_ordem.png")
-        page_link_icon("pages/Producao.py", "Producao", "icones/producao.png")
+        page_link_icon("pages/Producao.py", "Produção", "icones/producao.png")
         page_link_icon("pages/Qualidade.py", "Qualidade", "icones/qualidade.png")
         page_link_icon("pages/Embalagens.py", "Embalagens", "icones/embalagem.png")
         page_link_icon("pages/Historico_OP.py", "Histórico OP", "icones/historico.png")
@@ -825,7 +825,7 @@ def aplicar_filtros(programacao, historico):
     setores_disponiveis = SETORES_DASHBOARD
 
     st.markdown('<p class="side-label">Filtros</p>', unsafe_allow_html=True)
-    usuarios_selecionados = st.multiselect("Usuario", usuarios, default=usuarios)
+    usuarios_selecionados = st.multiselect("Usuário", usuarios, default=usuarios)
     setores_selecionados = st.multiselect("Setores", setores_disponiveis, default=setores_disponiveis)
 
     if usuarios_selecionados:
@@ -892,7 +892,7 @@ def aplicar_filtros(programacao, historico):
     datas_disponiveis = pd.concat([datas_programacao, datas_historico], ignore_index=True).dropna()
     datas_disponiveis = pd.to_datetime(datas_disponiveis, errors="coerce").dropna()
 
-    modo_data = st.selectbox("Periodo", ["Tudo", "Mes inteiro", "Dia especifico", "Intervalo"])
+    modo_data = st.selectbox("Período", ["Tudo", "Mês inteiro", "Dia específico", "Intervalo"])
     data_inicio = None
     data_fim = None
     if not datas_disponiveis.empty:
@@ -919,14 +919,14 @@ def aplicar_filtros(programacao, historico):
     }
     anos_disponiveis = sorted(set(datas_disponiveis.dt.year.astype(int).tolist())) if not datas_disponiveis.empty else [maior_data.year]
 
-    if modo_data == "Mes inteiro":
+    if modo_data == "Mês inteiro":
         ano = st.selectbox("Ano", anos_disponiveis, index=max(0, anos_disponiveis.index(maior_data.year) if maior_data.year in anos_disponiveis else len(anos_disponiveis) - 1))
         nomes_meses = list(meses.keys())
-        mes_nome = st.selectbox("Mes", nomes_meses, index=maior_data.month - 1)
+        mes_nome = st.selectbox("Mês", nomes_meses, index=maior_data.month - 1)
         inicio_mes = pd.Timestamp(year=int(ano), month=meses[mes_nome], day=1)
         data_inicio = inicio_mes
         data_fim = inicio_mes + pd.offsets.MonthEnd(0)
-    elif modo_data == "Dia especifico":
+    elif modo_data == "Dia específico":
         dia = st.date_input("Dia", value=maior_data, format="DD/MM/YYYY")
         data_inicio = pd.Timestamp(dia)
         data_fim = pd.Timestamp(dia)
@@ -1173,7 +1173,7 @@ def render_ranking_produzido(historico):
 
 def montar_ranking_produzido_html(historico):
     if historico.empty:
-        return montar_chart_html("Ranking produzido", vazio="Aguardando lancamentos.")
+        return montar_chart_html("Ranking produzido", vazio="Aguardando lançamentos.")
 
     ranking = (
         historico.groupby("USUARIO_RESPONSAVEL", as_index=False)
@@ -1181,7 +1181,7 @@ def montar_ranking_produzido_html(historico):
         .sort_values("Produzido", ascending=False)
     )
     if ranking.empty:
-        return montar_chart_html("Ranking produzido", vazio="Aguardando lancamentos.")
+        return montar_chart_html("Ranking produzido", vazio="Aguardando lançamentos.")
 
     maior_valor = max(float(ranking["Produzido"].max()), 1)
     cores = ["#f7d154", "#d7dce2", "#d89b63", "#6fb6ff", "#89d47f", "#ff8f70", "#b8a3ff"]
@@ -1300,7 +1300,7 @@ def render_programados_produto(programacao, historico):
 
 def montar_programados_produto_html(programacao, historico):
     if programacao.empty and historico.empty:
-        return montar_chart_html("Itens programados no periodo", vazio="Sem itens programados no periodo.")
+        return montar_chart_html("Itens programados no período", vazio="Sem itens programados no período.")
 
     produtos = (
         programacao.groupby(["COD_PRODUTO", "PRODUTO"], as_index=False)
@@ -1326,13 +1326,13 @@ def montar_programados_produto_html(programacao, historico):
         .head(12)
     )
     if produtos.empty:
-        return montar_chart_html("Itens programados no periodo", vazio="Sem itens programados no periodo.")
+        return montar_chart_html("Itens programados no período", vazio="Sem itens programados no período.")
 
     maior_valor = max(float(produtos["Quantidade"].max()), 1)
     itens = []
     for linha in produtos.itertuples(index=False):
-        codigo = escape(str(linha.COD_PRODUTO) or "Sem codigo")
-        produto = escape(str(linha.PRODUTO) or "Produto sem descricao")
+        codigo = escape(str(linha.COD_PRODUTO) or "Sem código")
+        produto = escape(str(linha.PRODUTO) or "Produto sem descrição")
         quantidade_num = float(linha.Quantidade)
         realizado_num = float(linha.Realizado)
         quantidade = formatar_numero(quantidade_num)
@@ -1456,7 +1456,7 @@ def montar_programados_produto_html(programacao, historico):
             }}
         </style>
         <div class="dashboard-card product-card">
-            <div class="product-title">Itens programados no periodo</div>
+            <div class="product-title">Itens programados no período</div>
             <div class="product-list">{"".join(itens)}</div>
         </div>
         """
@@ -1723,10 +1723,10 @@ def montar_realizacoes_periodo_html(historico, contexto_periodo):
     if historico_com_data.empty:
         return montar_chart_html("Realizacoes por dia")
 
-    if contexto_periodo.get("modo_data") == "Dia especifico":
+    if contexto_periodo.get("modo_data") == "Dia específico":
         historico_com_hora = historico_com_data[historico_com_data["DATA_HORA_DT"].notna()].copy()
         if historico_com_hora.empty:
-            return montar_chart_html("Realizacoes por hora", vazio="Sem horario nos lancamentos do dia.")
+            return montar_chart_html("Realizações por hora", vazio="Sem horário nos lançamentos do dia.")
 
         hora_decimal = (
             historico_com_hora["DATA_HORA_DT"].dt.hour
@@ -1734,7 +1734,7 @@ def montar_realizacoes_periodo_html(historico, contexto_periodo):
         )
         historico_com_hora = historico_com_hora[(hora_decimal >= 8) & (hora_decimal < 19)].copy()
         if historico_com_hora.empty:
-            return montar_chart_html("Realizacoes por hora", vazio="Sem lancamentos entre 08h e 18h.")
+            return montar_chart_html("Realizações por hora", vazio="Sem lançamentos entre 08h e 18h.")
 
         hora_decimal = (
             historico_com_hora["DATA_HORA_DT"].dt.hour
@@ -1792,7 +1792,7 @@ def montar_realizacoes_periodo_html(historico, contexto_periodo):
         )
 
     if len(por_dia) < 2:
-        return montar_chart_html("Realizacoes por dia", vazio="Aguardando mais lancamentos.")
+        return montar_chart_html("Realizações por dia", vazio="Aguardando mais lançamentos.")
 
     por_dia["Dia"] = pd.to_datetime(por_dia["DATA"]).dt.strftime("%d/%m")
     por_dia["Rotulo"] = por_dia["Realizado"].map(formatar_numero)
@@ -1827,7 +1827,7 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
 
     ordens_usuario = ordens_por_usuario_dashboard(programacao, historico)
     if ordens_usuario.empty:
-        cards.append(montar_chart_html("Ordens por usuario"))
+        cards.append(montar_chart_html("Ordens por usuário"))
     else:
         ordens_usuario["Rotulo"] = ordens_usuario["Ordens"].map(formatar_numero)
         fig = px.bar(
@@ -1841,7 +1841,7 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
         fig = aplicar_rotulos_barras(grafico_base(fig))
         fig.update_layout(showlegend=False, margin=dict(l=48, r=18, t=24, b=52))
         fig.update_xaxes(tickangle=-35)
-        cards.append(montar_chart_html("Ordens por usuario", fig=fig))
+        cards.append(montar_chart_html("Ordens por usuário", fig=fig))
 
     if programacao.empty:
         cards.append(montar_chart_html("Status das ordens"))
@@ -1933,10 +1933,10 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
     cards.append(montar_programados_produto_html(programacao, historico))
     cards.append(
         montar_leadtime_tabela_html(
-            "Tempo medio por usuario",
+            "Tempo médio por usuário",
             leadtime,
             "USUARIO_RESPONSAVEL",
-            "Aguardando ordens com inicio e fim.",
+            "Aguardando ordens com início e fim.",
             "Leadtime_horas",
         )
     )
@@ -1945,7 +1945,7 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
             "Tempo medio por produto",
             leadtime,
             "PRODUTO",
-            "Aguardando produtos com inicio e fim.",
+            "Aguardando produtos com início e fim.",
             "Leadtime_item_horas",
             total_por_quantidade=True,
         )
@@ -1955,7 +1955,7 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
 def render_tabela_resumo(programacao, historico):
     if programacao.empty:
         with st.container(border=True):
-            st.markdown('<p class="chart-title">Resumo por usuario</p>', unsafe_allow_html=True)
+            st.markdown('<p class="chart-title">Resumo por usuário</p>', unsafe_allow_html=True)
         return
 
     resumo = (
@@ -1980,7 +1980,7 @@ def render_tabela_resumo(programacao, historico):
     )
     resumo = resumo.rename(
         columns={
-            "USUARIO_RESPONSAVEL": "Usuario",
+            "USUARIO_RESPONSAVEL": "Usuário",
             "Programado": "Qtd. programada",
             "Realizado": "Qtd. realizada",
             "Pendente": "Qtd. pendente",
@@ -1990,9 +1990,9 @@ def render_tabela_resumo(programacao, historico):
         resumo[coluna] = resumo[coluna].map(formatar_numero)
 
     with st.container(border=True):
-        st.markdown('<p class="chart-title">Resumo por usuario</p>', unsafe_allow_html=True)
+        st.markdown('<p class="chart-title">Resumo por usuário</p>', unsafe_allow_html=True)
         st.dataframe(
-            resumo[["Usuario", "Ordens", "Qtd. programada", "Qtd. realizada", "Qtd. pendente", "Atrasadas", "Aproveitamento"]],
+            resumo[["Usuário", "Ordens", "Qtd. programada", "Qtd. realizada", "Qtd. pendente", "Atrasadas", "Aproveitamento"]],
             hide_index=True,
             use_container_width=True,
         )
@@ -2004,7 +2004,7 @@ try:
     feriados = carregar_feriados()
     historico = preparar_historico(carregar_historico())
 except Exception as exc:
-    st.error("Nao foi possivel carregar os dados do dashboard.")
+    st.error("Não foi possível carregar os dados do dashboard.")
     st.caption(str(exc))
     st.stop()
 

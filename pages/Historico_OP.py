@@ -245,7 +245,7 @@ def render_sidebar():
         render_sidebar_brand()
         page_link_icon("app.py", "Inicio", "icones/logo preto goper.png")
         page_link_icon("pages/Criar_OP.py", "Criar OP", "icones/nova_ordem.png")
-        page_link_icon("pages/Producao.py", "Producao", "icones/producao.png")
+        page_link_icon("pages/Producao.py", "Produção", "icones/producao.png")
         page_link_icon("pages/Qualidade.py", "Qualidade", "icones/qualidade.png")
         page_link_icon("pages/Embalagens.py", "Embalagens", "icones/embalagem.png")
         page_link_icon("pages/Historico_OP.py", "Histórico OP", "icones/historico.png")
@@ -384,8 +384,8 @@ def tabela_historico(lancamentos):
     dados = dados.rename(columns={
         "DATA_HORA_DT": "Data/hora",
         "ACAO": "Acao",
-        "USUARIO_RESPONSAVEL": "Usuario",
-        "CODIGO": "Codigo",
+        "USUARIO_RESPONSAVEL": "Usuário",
+        "CODIGO": "Código",
         "PRODUTO": "Produto",
         "QUANTIDADE_NUM": "Quantidade",
         "TIPO": "Tipo",
@@ -408,7 +408,7 @@ def linhas_calculo_tempo(tempos):
         dia = escape(str(detalhe.get("DIA", "")))
         intervalo = escape(str(detalhe.get("INTERVALO", "")))
         tempo = escape(str(detalhe.get("TEMPO", "")))
-        linhas.append(f"<div>{dia} - horario {intervalo} - {tempo}</div>")
+        linhas.append(f"<div>{dia} - horário {intervalo} - {tempo}</div>")
     return linhas
 
 
@@ -423,7 +423,7 @@ st.markdown(
     <div class="page-head">
         <div>
             <h1 class="page-title">Histórico OP</h1>
-            <p class="page-copy">Consulta detalhada para entender o que aconteceu com uma ordem de producao.</p>
+            <p class="page-copy">Consulta detalhada para entender o que aconteceu com uma ordem de produção.</p>
         </div>
         <div class="page-logos">
             <img src="data:image/bmp;base64,{logo_branco}" alt="Trendx">
@@ -440,18 +440,18 @@ try:
     historico = carregar_historico()
     feriados = carregar_feriados()
 except Exception as exc:
-    st.error("Nao foi possivel carregar os dados do historico.")
+    st.error("Não foi possível carregar os dados do histórico.")
     st.caption(str(exc))
     st.stop()
 
 opcoes, mapa_opcoes = opcoes_ordens(ordens, historico)
 if not opcoes:
-    st.warning("Nenhuma ordem encontrada na programacao ou no historico.")
+    st.warning("Nenhuma ordem encontrada na programação ou no histórico.")
     st.stop()
 
 filtro_col, atualizar_col = st.columns([5.5, 1], vertical_alignment="bottom")
 with filtro_col:
-    opcao_selecionada = st.selectbox("Ordem de producao", opcoes, key="historico_op_ordem")
+    opcao_selecionada = st.selectbox("Ordem de produção", opcoes, key="historico_op_ordem")
 with atualizar_col:
     if st.button("Atualizar", key="historico_op_atualizar", use_container_width=True):
         carregar_ordens.clear()
@@ -484,18 +484,18 @@ render_cards([
     montar_card("Origem", origem_selecionada, "Aba da planilha usada na consulta"),
     montar_card("OP", op_selecionada, texto_unico(programacao_op if not programacao_op.empty else lancamentos, "PRODUTO")),
     montar_card("Quantidade programada", formatar_numero(qtd_programada), f"Saldo atual: {formatar_numero(saldo)}"),
-    montar_card("Realizado no historico", formatar_numero(qtd_historico), f"Realizado na planilha: {formatar_numero(qtd_planilha_realizada)}"),
+    montar_card("Realizado no histórico", formatar_numero(qtd_historico), f"Realizado na planilha: {formatar_numero(qtd_planilha_realizada)}"),
 ])
 render_cards([
-    montar_card("Tempo util da OP", tempo_util, "Considera turno, sexta, feriados e fins de semana"),
-    montar_card("Responsavel", texto_unico(programacao_op if not programacao_op.empty else lancamentos, "USUARIO_RESPONSAVEL"), ""),
+    montar_card("Tempo útil da OP", tempo_util, "Considera turno, sexta, feriados e fins de semana"),
+    montar_card("Responsável", texto_unico(programacao_op if not programacao_op.empty else lancamentos, "USUARIO_RESPONSAVEL"), ""),
     montar_card("Status", texto_unico(programacao_op, "STATUS"), ""),
-    montar_card("Lancamentos", len(lancamentos), "Registros encontrados no historico"),
+    montar_card("Lançamentos", len(lancamentos), "Registros encontrados no histórico"),
 ])
 
 if programacao_op["COD_PRODUTO"].nunique() > 1 if not programacao_op.empty and "COD_PRODUTO" in programacao_op.columns else False:
     st.markdown(
-        '<div class="warning-box">Esta OP aparece com mais de um codigo de produto na programacao. Confira a planilha.</div>',
+        '<div class="warning-box">Esta OP aparece com mais de um código de produto na programação. Confira a planilha.</div>',
         unsafe_allow_html=True,
     )
 
@@ -503,18 +503,18 @@ st.markdown('<p class="section-title">Como o tempo foi calculado</p>', unsafe_al
 if tempos:
     linhas_tempo = linhas_calculo_tempo(tempos)
     st.markdown(
-        f'<div class="explain-box">{"".join(linhas_tempo) if linhas_tempo else "Nenhum horario util contado."}</div>',
+        f'<div class="explain-box">{"".join(linhas_tempo) if linhas_tempo else "Nenhum horário útil contado."}</div>',
         unsafe_allow_html=True,
     )
 else:
     st.markdown(
-        '<div class="warning-box">Ainda nao existe inicio e fim validos para calcular o tempo desta OP.</div>',
+        '<div class="warning-box">Ainda não existe início e fim válidos para calcular o tempo desta OP.</div>',
         unsafe_allow_html=True,
     )
 
-st.markdown('<p class="section-title">Lancamentos do historico</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-title">Lançamentos do histórico</p>', unsafe_allow_html=True)
 historico_tabela = tabela_historico(lancamentos)
 if historico_tabela.empty:
-    st.info("Esta OP ainda nao possui lancamentos no historico.")
+    st.info("Esta OP ainda não possui lançamentos no histórico.")
 else:
     st.dataframe(historico_tabela, hide_index=True, use_container_width=True, height=300)

@@ -414,10 +414,10 @@ def render_sidebar():
         render_sidebar_brand()
         page_link_icon("app.py", "Inicio", "icones/logo preto goper.png")
         page_link_icon("pages/Criar_OP.py", "Criar OP", "icones/nova_ordem.png")
-        page_link_icon("pages/Producao.py", "Producao", "icones/producao.png")
+        page_link_icon("pages/Producao.py", "Produção", "icones/producao.png")
         page_link_icon("pages/Qualidade.py", "Qualidade", "icones/qualidade.png")
         page_link_icon("pages/Embalagens.py", "Embalagens", "icones/embalagem.png")
-        page_link_icon("pages/Historico_OP.py", "Historico OP", "icones/historico.png")
+        page_link_icon("pages/Historico_OP.py", "Histórico OP", "icones/historico.png")
         page_link_icon("pages/Dashboard.py", "Dashboard", "icones/indicadores.png")
 
 
@@ -533,7 +533,7 @@ try:
     ordens = carregar_ordens()
     usuarios = carregar_usuarios()
 except Exception as exc:
-    st.error("Nao foi possivel carregar os dados da planilha.")
+    st.error("Não foi possível carregar os dados da planilha.")
     st.caption(str(exc))
     st.stop()
 
@@ -590,11 +590,11 @@ with st.container(border=True):
             data_prevista = st.date_input("Data prevista", format="DD/MM/YYYY")
         with linha1[3]:
             usuarios_lista = [""] + nomes_usuarios(usuarios)
-            responsavel = st.selectbox("Responsavel", usuarios_lista)
+            responsavel = st.selectbox("Responsável", usuarios_lista)
 
         linha2 = st.columns([0.25, 0.75])
         with linha2[0]:
-            codigo = st.text_input("Codigo do item", key="criar_op_codigo")
+            codigo = st.text_input("Código do item", key="criar_op_codigo")
         produto_encontrado = produto_por_codigo(produtos, codigo)
         produto_sugerido_codigo = str(st.session_state.get("criar_op_produto_sugerido_codigo", "")).strip()
         produto_sugerido = str(st.session_state.get("criar_op_produto_sugerido", "")).strip()
@@ -602,7 +602,7 @@ with st.container(border=True):
         produto_padrao = produto_encontrado["PRODUTO"] if produto_encontrado else (produto_sugerido if produto_sugerido_valido else "")
         with linha2[1]:
             produto = st.text_input(
-                "Descricao do item",
+                "Descrição do item",
                 value=produto_padrao,
                 disabled=bool(produto_encontrado),
             )
@@ -619,7 +619,7 @@ with st.container(border=True):
             st.markdown(f'<div class="op-hint">{info_item}</div>', unsafe_allow_html=True)
         elif codigo and not produto_sugerido_valido:
             st.markdown(
-                '<div class="op-hint">Codigo nao localizado no Bd_produtos. Preencha a descricao manualmente para cadastrar atividade extra.</div>',
+                '<div class="op-hint">Código não localizado no Bd_produtos. Preencha a descrição manualmente para cadastrar atividade extra.</div>',
                 unsafe_allow_html=True,
             )
         elif codigo and produto_sugerido_valido:
@@ -637,19 +637,19 @@ with st.container(border=True):
         peca = ""
         qtd_pecas = ""
         if aba == ABAS_PLANEJAMENTO[2]:
-            st.markdown('<div class="op-section-title" style="margin-top:8px;">Pecas</div>', unsafe_allow_html=True)
+            st.markdown('<div class="op-section-title" style="margin-top:8px;">Peças</div>', unsafe_allow_html=True)
             linha4 = st.columns([0.22, 0.56, 0.22])
             with linha4[0]:
-                cod_peca = st.text_input("Codigo da peca")
+                cod_peca = st.text_input("Código da peça")
             with linha4[1]:
-                peca = st.text_input("Descricao da peca")
+                peca = st.text_input("Descrição da peça")
             with linha4[2]:
-                qtd_pecas = st.number_input("Qtd. pecas", min_value=0, value=0, step=1)
+                qtd_pecas = st.number_input("Qtd. peças", min_value=0, value=0, step=1)
 
     with col_sugestoes:
         with st.container(border=True, key="criar_op_sugestao_card"):
             st.markdown('<div class="op-suggestion-title">Itens mais usados</div>', unsafe_allow_html=True)
-            st.markdown('<div class="op-side-note">Use a lista apenas como atalho. Ao escolher um item, o codigo e preenchido automaticamente.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="op-side-note">Use a lista apenas como atalho. Ao escolher um item, o código é preenchido automaticamente.</div>', unsafe_allow_html=True)
             rotulos_sugestoes = [""] + [rotulo_sugestao(item) for _, item in sugestoes.iterrows()]
             st.session_state["criar_op_sugestoes_map"] = {
                 rotulo_sugestao(item): {
@@ -678,9 +678,9 @@ if confirmar:
     if not str(op).strip():
         erros.append("Informe o numero da OP.")
     if not str(codigo).strip():
-        erros.append("Informe o codigo do item.")
+        erros.append("Informe o código do item.")
     if not str(descricao_final).strip():
-        erros.append("Informe a descricao do item.")
+        erros.append("Informe a descrição do item.")
     if quantidade <= 0:
         erros.append("Informe uma quantidade maior que zero.")
 
@@ -705,7 +705,7 @@ if confirmar:
         try:
             resultado = criar_ordem_planejamento(aba, dados)
         except Exception as exc:
-            st.error("Nao foi possivel criar a ordem.")
+            st.error("Não foi possível criar a ordem.")
             st.caption(str(exc))
         else:
             bloco = "em novo bloco semanal" if resultado["novo_bloco"] else "no bloco semanal existente"

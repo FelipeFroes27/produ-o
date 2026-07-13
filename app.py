@@ -7,7 +7,7 @@ from utils.display_mode import ativar_modo_exibicao, page_link_icon, render_menu
 
 
 st.set_page_config(
-    page_title="Controle de Producao",
+    page_title="Controle de Produção",
     page_icon="icones/menu.png",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -193,7 +193,7 @@ with st.sidebar:
     render_sidebar_brand()
     page_link_icon("app.py", "Inicio", "icones/logo preto goper.png")
     page_link_icon("pages/Criar_OP.py", "Criar OP", "icones/nova_ordem.png")
-    page_link_icon("pages/Producao.py", "Producao", "icones/producao.png")
+    page_link_icon("pages/Producao.py", "Produção", "icones/producao.png")
     page_link_icon("pages/Qualidade.py", "Qualidade", "icones/qualidade.png")
     page_link_icon("pages/Embalagens.py", "Embalagens", "icones/embalagem.png")
     page_link_icon("pages/Historico_OP.py", "Histórico OP", "icones/historico.png")
@@ -211,28 +211,28 @@ st.markdown(
     </div>
     <div class="home-hero">
         <div>
-            <h1 class="home-title">Sistema de controle de producao</h1>
+            <h1 class="home-title">Sistema de controle de produção</h1>
             <p class="home-copy">
-                Menu inicial do sistema para acompanhar demandas, conclusoes e desempenho da producao.
+                Menu inicial do sistema para acompanhar demandas, conclusões e desempenho da produção.
             </p>
         </div>
         <div class="home-panel">
             <div class="home-panel-title">Menu do sistema</div>
             <div class="home-section">
-                Producao
-                <span>Tela inicial reservada para o controle das ordens de producao.</span>
+                Produção
+                <span>Tela inicial reservada para o controle das ordens de produção.</span>
             </div>
             <div class="home-section">
                 Qualidade
-                <span>Aprovacao e reprovacao de ordens enviadas para inspecao.</span>
+                <span>Aprovação e reprovação de ordens enviadas para inspeção.</span>
             </div>
             <div class="home-section">
                 Embalagens
-                <span>Registro de inicio, pausa e conclusao dos itens liberados para embalagem.</span>
+                <span>Registro de início, pausa e conclusão dos itens liberados para embalagem.</span>
             </div>
             <div class="home-section">
-                Historico OP
-                <span>Consulta detalhada dos lancamentos e do tempo util por ordem.</span>
+                Histórico OP
+                <span>Consulta detalhada dos lançamentos e do tempo útil por ordem.</span>
             </div>
             <div class="home-section">
                 Dashboard

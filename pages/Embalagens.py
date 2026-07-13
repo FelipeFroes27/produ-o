@@ -285,10 +285,10 @@ def render_sidebar():
         render_sidebar_brand()
         page_link_icon("app.py", "Inicio", "icones/logo preto goper.png")
         page_link_icon("pages/Criar_OP.py", "Criar OP", "icones/nova_ordem.png")
-        page_link_icon("pages/Producao.py", "Producao", "icones/producao.png")
+        page_link_icon("pages/Producao.py", "Produção", "icones/producao.png")
         page_link_icon("pages/Qualidade.py", "Qualidade", "icones/qualidade.png")
         page_link_icon("pages/Embalagens.py", "Embalagens", "icones/embalagem.png")
-        page_link_icon("pages/Historico_OP.py", "Historico OP", "icones/historico.png")
+        page_link_icon("pages/Historico_OP.py", "Histórico OP", "icones/historico.png")
         page_link_icon("pages/Dashboard.py", "Dashboard", "icones/indicadores.png")
 
 
@@ -568,8 +568,8 @@ def render_detalhes_item(item):
         f"""
         <div class="detail-grid">
             <div class="detail-box">
-                <div class="detail-label">Codigo</div>
-                <div class="detail-value">{escape(str(item.get("COD_PRODUTO", "")) or "Sem codigo")}</div>
+                <div class="detail-label">Código</div>
+                <div class="detail-value">{escape(str(item.get("COD_PRODUTO", "")) or "Sem código")}</div>
             </div>
             <div class="detail-box">
                 <div class="detail-label">Produto</div>
@@ -598,7 +598,7 @@ def modal_informacao(item):
 def modal_inicio_embalagem(item, usuarios):
     render_detalhes_item(item)
     if not usuarios:
-        st.error("Nenhum usuario foi encontrado na aba Usuarios.")
+        st.error("Nenhum usuário foi encontrado na aba Usuários.")
         return
 
     origens = [
@@ -607,15 +607,15 @@ def modal_inicio_embalagem(item, usuarios):
         and str(origem.get("ULTIMA_ACAO_EMBALAGEM", "")).upper() != "INICIO"
     ]
     if not origens:
-        st.error("Este item ja esta em andamento na embalagem.")
+        st.error("Este item já está em andamento na embalagem.")
         return
 
     chave = chave_css_texto(item["COD_PRODUTO"], item["PRODUTO"], "inicio")
     trava = f"embalagem_trava_{chave}"
     with st.form(f"form_{chave}"):
-        usuario = st.selectbox("Usuario da embalagem", usuarios)
+        usuario = st.selectbox("Usuário da embalagem", usuarios)
         confirmar = st.form_submit_button(
-            "Lancamento em andamento..." if st.session_state.get(trava) else "Confirmar inicio",
+            "Lançamento em andamento..." if st.session_state.get(trava) else "Confirmar início",
             use_container_width=True,
             disabled=bool(st.session_state.get(trava, False)),
         )
@@ -642,14 +642,14 @@ def modal_pausa_embalagem(item, usuarios):
         if str(origem.get("ULTIMA_ACAO_EMBALAGEM", "")).upper() == "INICIO"
     ]
     if not origens:
-        st.error("Este item nao possui embalagem em andamento para pausar.")
+        st.error("Este item não possui embalagem em andamento para pausar.")
         return
 
     chave = chave_css_texto(item["COD_PRODUTO"], item["PRODUTO"], "pausa")
     trava = f"embalagem_trava_{chave}"
     with st.form(f"form_{chave}"):
         confirmar = st.form_submit_button(
-            "Lancamento em andamento..." if st.session_state.get(trava) else "Confirmar pausa",
+            "Lançamento em andamento..." if st.session_state.get(trava) else "Confirmar pausa",
             use_container_width=True,
             disabled=bool(st.session_state.get(trava, False)),
         )
@@ -680,7 +680,7 @@ def modal_conclusao(item, usuarios):
         and float(origem.get("QUANTIDADE_PENDENTE", 0) or 0) > 0
     ]
     if not origens_ativas:
-        st.error("Nao foi encontrada nenhuma OP iniciada para receber a embalagem.")
+        st.error("Não foi encontrada nenhuma OP iniciada para receber a embalagem.")
         return
 
     chave = chave_css_texto(item["COD_PRODUTO"], item["PRODUTO"], "conclusao")
@@ -695,7 +695,7 @@ def modal_conclusao(item, usuarios):
             step=1,
         )
         confirmar = st.form_submit_button(
-            "Lancamento em andamento..." if st.session_state.get(trava) else "Confirmar embalagem",
+            "Lançamento em andamento..." if st.session_state.get(trava) else "Confirmar embalagem",
             use_container_width=True,
             disabled=bool(st.session_state.get(trava, False)),
         )
@@ -718,18 +718,18 @@ def modal_conclusao(item, usuarios):
             st.error(str(exc))
         else:
             st.session_state.pop(trava, None)
-            st.success("Embalagem registrada no historico.")
+            st.success("Embalagem registrada no histórico.")
             st.rerun()
 
 
 def render_card_embalagem(item, usuarios):
     chave_css = chave_css_texto(item["COD_PRODUTO"], item["PRODUTO"])
     key_card = f"embalagem_{chave_css}"
-    produto = str(item["PRODUTO"]) or "Produto sem descricao"
-    codigo = str(item["COD_PRODUTO"]) or "Sem codigo"
+    produto = str(item["PRODUTO"]) or "Produto sem descrição"
+    codigo = str(item["COD_PRODUTO"]) or "Sem código"
     em_andamento = bool(item.get("EM_ANDAMENTO", False))
     pausada = bool(item.get("PAUSADA", False))
-    status_fluxo = "Pausado" if pausada else "Em andamento" if em_andamento else "Aguardando inicio"
+    status_fluxo = "Pausado" if pausada else "Em andamento" if em_andamento else "Aguardando início"
 
     aplicar_estilo_card_fluxo(key_card)
     with st.container(border=True, key=key_card):
@@ -767,7 +767,7 @@ def render_card_embalagem(item, usuarios):
                 aplicar_icone_botao(key, ICONES_BOTOES["inicio"])
                 desabilitado = (em_andamento and not pausada) or bool(st.session_state.get(trava, False))
                 texto = "Retomar" if pausada else "Iniciar"
-                if st.button(texto, key=key, help="Registrar inicio/retomada da embalagem", disabled=desabilitado):
+                if st.button(texto, key=key, help="Registrar início/retomada da embalagem", disabled=desabilitado):
                     modal_inicio_embalagem(item, usuarios)
             with acao_2:
                 key = f"pausar_{chave_css}"
@@ -779,7 +779,7 @@ def render_card_embalagem(item, usuarios):
             with acao_3:
                 key = f"consulta_{chave_css}"
                 aplicar_icone_botao(key, ICONES_BOTOES["consulta"])
-                if st.button("Informacao", key=key, help="Consultar item"):
+                if st.button("Informação", key=key, help="Consultar item"):
                     modal_informacao(item)
             with acao_4:
                 key = f"concluir_{chave_css}"
@@ -946,7 +946,7 @@ try:
     ordens = carregar_ordens()
     historico = carregar_historico()
 except Exception as exc:
-    st.error("Nao foi possivel carregar os dados de embalagem.")
+    st.error("Não foi possível carregar os dados de embalagem.")
     st.caption(str(exc))
     st.stop()
 
@@ -956,7 +956,7 @@ fila = montar_fila_embalagem(historico)
 f1, f2 = st.columns([5.6, 1], vertical_alignment="bottom")
 with f1:
     if not operadores:
-        st.warning("Nenhum usuario foi encontrado na aba Usuarios.")
+        st.warning("Nenhum usuário foi encontrado na aba Usuários.")
 with f2:
     if st.button("Atualizar", key="embalagem_atualizar", use_container_width=True):
         carregar_usuarios.clear()
@@ -970,7 +970,7 @@ with k1:
 with k2:
     render_kpi("Qtd. pendente", numero(fila["QUANTIDADE_PENDENTE"].sum() if not fila.empty else 0), "Total a embalar")
 with k3:
-    render_kpi("Qtd. embalada", numero(fila["QUANTIDADE_EMBALADA"].sum() if not fila.empty else 0), "Total registrado no periodo")
+    render_kpi("Qtd. embalada", numero(fila["QUANTIDADE_EMBALADA"].sum() if not fila.empty else 0), "Total registrado no período")
 
 st.markdown('<div class="panel-title">Pendencias de embalagem</div>', unsafe_allow_html=True)
 render_puxar_ordem_embalagem(ordens, historico)

@@ -11,7 +11,7 @@ from utils.sheets import _normalizar, acao_base_historico, acao_etapa_historico,
 
 
 st.set_page_config(
-    page_title="Producao",
+    page_title="Produção",
     page_icon="icones/producao.png",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -561,7 +561,7 @@ def render_sidebar():
         render_sidebar_brand()
         page_link_icon("app.py", "Inicio", "icones/logo preto goper.png")
         page_link_icon("pages/Criar_OP.py", "Criar OP", "icones/nova_ordem.png")
-        page_link_icon("pages/Producao.py", "Producao", "icones/producao.png")
+        page_link_icon("pages/Producao.py", "Produção", "icones/producao.png")
         page_link_icon("pages/Qualidade.py", "Qualidade", "icones/qualidade.png")
         page_link_icon("pages/Embalagens.py", "Embalagens", "icones/embalagem.png")
         page_link_icon("pages/Historico_OP.py", "Histórico OP", "icones/historico.png")
@@ -842,9 +842,9 @@ def render_ordem_card(linha, ordens_usuario):
     chave = f"{linha['ABA_ORIGEM']}|{linha['LINHA_PLANILHA']}"
     chave_css = f"{origem_chave(linha['ABA_ORIGEM'])}_{linha['LINHA_PLANILHA']}"
     key_card = f"card_{chave_css}"
-    produto = str(linha["PRODUTO"]) or "Produto sem descricao"
+    produto = str(linha["PRODUTO"]) or "Produto sem descrição"
     op = str(linha["OP"]) or "Sem OP"
-    codigo = str(linha["COD_PRODUTO"]) or "Sem codigo"
+    codigo = str(linha["COD_PRODUTO"]) or "Sem código"
     status = str(linha["STATUS"]) or "Sem status"
     em_andamento = bool(linha.get("EM_ANDAMENTO", False))
     pausada = bool(linha.get("PAUSADA", False))
@@ -862,7 +862,7 @@ def render_ordem_card(linha, ordens_usuario):
         badges.append('<span class="order-badge">Pausado</span>')
     badges_html = "".join(badges)
     alerta_duplicidade = (
-        f'<div class="duplicate-alert">Esta ordem esta em {qtd_duplicadas} linhas na programacao. Corrija a planilha para liberar inicio/conclusao.</div>'
+        f'<div class="duplicate-alert">Esta ordem está em {qtd_duplicadas} linhas na programação. Corrija a planilha para liberar início/conclusão.</div>'
         if duplicada
         else ""
     )
@@ -909,17 +909,17 @@ def render_ordem_card(linha, ordens_usuario):
                 inicio_desabilitado = duplicada or (em_andamento and not pausada) or bool(st.session_state.get(trava_inicio, False))
                 texto_inicio = "Retomar" if pausada else "Iniciar"
                 ajuda_inicio = (
-                    "Corrija a duplicidade na programacao para iniciar."
+                    "Corrija a duplicidade na programação para iniciar."
                     if duplicada
-                    else "A ordem ja esta em andamento."
+                    else "A ordem já está em andamento."
                     if em_andamento and not pausada
                     else "Retomar contagem da ordem."
                     if pausada
-                    else "Registrar inicio da ordem."
+                    else "Registrar início da ordem."
                 )
                 if st.button(texto_inicio, key=key_inicio, help=ajuda_inicio, disabled=inicio_desabilitado):
                     if st.session_state.get(trava_inicio, False):
-                        st.warning("Lancamento ja esta em andamento.")
+                        st.warning("Lançamento já está em andamento.")
                         st.markdown("</div>", unsafe_allow_html=True)
                         return
                     st.session_state[trava_inicio] = True
@@ -939,9 +939,9 @@ def render_ordem_card(linha, ordens_usuario):
                 st.markdown('<div class="pause-button">', unsafe_allow_html=True)
                 pausa_desabilitada = duplicada or pausada or not em_andamento or bool(st.session_state.get(trava_pausa, False))
                 ajuda_pausa = (
-                    "Corrija a duplicidade na programacao para pausar."
+                    "Corrija a duplicidade na programação para pausar."
                     if duplicada
-                    else "A ordem ja esta pausada."
+                    else "A ordem já está pausada."
                     if pausada
                     else "A ordem precisa estar em andamento para pausar."
                     if not em_andamento
@@ -949,7 +949,7 @@ def render_ordem_card(linha, ordens_usuario):
                 )
                 if st.button("Pausar", key=key_pausa, help=ajuda_pausa, disabled=pausa_desabilitada):
                     if st.session_state.get(trava_pausa, False):
-                        st.warning("Lancamento ja esta em andamento.")
+                        st.warning("Lançamento já está em andamento.")
                         st.markdown("</div>", unsafe_allow_html=True)
                         return
                     st.session_state[trava_pausa] = True
@@ -975,7 +975,7 @@ def render_ordem_card(linha, ordens_usuario):
                 st.markdown('<div class="finish-button">', unsafe_allow_html=True)
                 conclusao_desabilitada = duplicada or pausada or not em_andamento
                 ajuda_conclusao = (
-                    "Corrija a duplicidade na programacao para concluir."
+                    "Corrija a duplicidade na programação para concluir."
                     if duplicada
                     else "Retome a ordem antes de concluir."
                     if pausada
@@ -991,9 +991,9 @@ def render_ordem_card(linha, ordens_usuario):
 def render_ordem_card_antigo(linha):
     chave = f"{linha['ABA_ORIGEM']}|{linha['LINHA_PLANILHA']}"
     selecionada = st.session_state.get("ordem_selecionada") == chave
-    produto = str(linha["PRODUTO"]) or "Produto sem descricao"
+    produto = str(linha["PRODUTO"]) or "Produto sem descrição"
     op = str(linha["OP"]) or "Sem OP"
-    codigo = str(linha["COD_PRODUTO"]) or "Sem codigo"
+    codigo = str(linha["COD_PRODUTO"]) or "Sem código"
 
     st.markdown(
         f"""
@@ -1026,8 +1026,8 @@ def render_ordem_card_antigo(linha):
 
 def rotulo_ordem(linha):
     op = str(linha["OP"]) or "Sem OP"
-    codigo = str(linha["COD_PRODUTO"]) or "Sem codigo"
-    produto = str(linha["PRODUTO"]) or "Produto sem descricao"
+    codigo = str(linha["COD_PRODUTO"]) or "Sem código"
+    produto = str(linha["PRODUTO"]) or "Produto sem descrição"
     return f"{linha['ABA_ORIGEM']} | OP {op} | {codigo} | {produto[:70]}"
 
 
@@ -1044,10 +1044,10 @@ def localizar_ordem(df):
 
 def render_detalhe(ordem, ordens_usuario, modo="consulta"):
     if ordem is None:
-        st.markdown('<div class="empty">Selecione uma ordem na lista para ver os detalhes e lancar a realizacao.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="empty">Selecione uma ordem na lista para ver os detalhes e lançar a realização.</div>', unsafe_allow_html=True)
         return
 
-    titulo = "Consulta da ordem" if modo == "consulta" else "Conclusao da ordem"
+    titulo = "Consulta da ordem" if modo == "consulta" else "Conclusão da ordem"
     st.markdown(f'<div class="panel"><div class="panel-title">{titulo}</div>', unsafe_allow_html=True)
     st.markdown(
         f"""
@@ -1061,8 +1061,8 @@ def render_detalhe(ordem, ordens_usuario, modo="consulta"):
                 <div class="detail-value">{escape(str(ordem["OP"]) or "Sem OP")}</div>
             </div>
             <div class="detail-box">
-                <div class="detail-label">Codigo</div>
-                <div class="detail-value">{escape(str(ordem["COD_PRODUTO"]) or "Sem codigo")}</div>
+                <div class="detail-label">Código</div>
+                <div class="detail-value">{escape(str(ordem["COD_PRODUTO"]) or "Sem código")}</div>
             </div>
             <div class="detail-box">
                 <div class="detail-label">Status</div>
@@ -1106,7 +1106,7 @@ def render_detalhe(ordem, ordens_usuario, modo="consulta"):
     if modo == "conclusao":
         saldo = float(ordem["SALDO_NUM"])
         if saldo <= 0:
-            st.success("Esta ordem nao possui saldo pendente.")
+            st.success("Esta ordem não possui saldo pendente.")
         elif not bool(ordem.get("EM_ANDAMENTO", False)):
             if bool(ordem.get("PAUSADA", False)):
                 st.warning("Retome a ordem antes de concluir.")
@@ -1133,12 +1133,12 @@ def render_detalhe(ordem, ordens_usuario, modo="consulta"):
                     enviar_qualidade = st.checkbox(
                         "Qualidade",
                         key=f"qualidade_{chave_lancamento}",
-                        help="Enviar este lancamento para aprovacao da qualidade.",
+                        help="Enviar este lançamento para aprovação da qualidade.",
                     )
                 with botao_col:
                     st.markdown('<div class="completion-spacer"></div>', unsafe_allow_html=True)
                     confirmar = st.form_submit_button(
-                        "Lancamento em andamento..." if lancamento_em_andamento else "Confirmar realizacao",
+                        "Lançamento em andamento..." if lancamento_em_andamento else "Confirmar realização",
                         use_container_width=True,
                         disabled=lancamento_em_andamento,
                     )
@@ -1146,7 +1146,7 @@ def render_detalhe(ordem, ordens_usuario, modo="consulta"):
 
             if confirmar:
                 if st.session_state.get(trava_lancamento, False):
-                    st.warning("Lancamento ja esta em andamento.")
+                    st.warning("Lançamento já está em andamento.")
                     return
                 st.session_state[trava_lancamento] = True
                 try:
@@ -1155,7 +1155,7 @@ def render_detalhe(ordem, ordens_usuario, modo="consulta"):
                     st.session_state.pop(trava_lancamento, None)
                     st.error(str(exc))
                 else:
-                    st.success("Realizacao registrada na ordem e no historico.")
+                    st.success("Realização registrada na ordem e no histórico.")
                     st.session_state.pop(trava_lancamento, None)
                     st.session_state.pop("ordem_selecionada", None)
                     st.session_state.pop("acao_ordem", None)
@@ -1180,7 +1180,7 @@ def render_pecas_faltantes(ordem, ordens_usuario):
         return
 
     pecas = pd.DataFrame(pecas_bloco)
-    st.markdown('<div class="panel-title">Pecas faltantes para consulta</div>', unsafe_allow_html=True)
+    st.markdown('<div class="panel-title">Peças faltantes para consulta</div>', unsafe_allow_html=True)
     altura = min(220, 42 + (len(pecas) * 32))
     st.dataframe(pecas, use_container_width=True, hide_index=True, height=max(110, altura))
 
@@ -1217,7 +1217,7 @@ st.markdown(
     f"""
     <div class="page-head">
         <div class="page-title">
-            <h1>Ordens do usuario</h1>
+            <h1>Ordens do usuário</h1>
             <p>Demanda de trabalho por responsavel, priorizada por prazo e saldo pendente.</p>
         </div>
         <div class="page-logos">
@@ -1235,17 +1235,17 @@ try:
     historico = carregar_historico()
     ordens = marcar_ordens_em_andamento(ordens, historico)
 except Exception as exc:
-    st.error("Nao foi possivel carregar a planilha Planejamento Producao.")
+    st.error("Não foi possível carregar a planilha Planejamento Produção.")
     st.caption(str(exc))
     st.stop()
 
 if usuarios.empty:
-    st.warning("Nenhum usuario cadastrado na aba Usuarios.")
+    st.warning("Nenhum usuário cadastrado na aba Usuários.")
     st.stop()
 
 nomes_usuarios = sorted(usuarios["Nome"].dropna().astype(str).str.strip().loc[lambda serie: serie != ""].unique())
 if not nomes_usuarios:
-    st.warning("Nenhum usuario com nome preenchido.")
+    st.warning("Nenhum usuário com nome preenchido.")
     st.stop()
 
 if "usuario_idx" not in st.session_state:
@@ -1295,19 +1295,19 @@ ordens_exibicao = ordenar_demanda(ocultar_repeticoes_duplicadas(ordens_pendentes
 
 k1, k2, k3, k4 = st.columns(4)
 with k1:
-    render_kpi("Ordens pendentes", len(ordens_exibicao), "Demandas abertas para este usuario")
+    render_kpi("Ordens pendentes", len(ordens_exibicao), "Demandas abertas para este usuário")
 with k2:
     render_kpi("Atrasadas", int(ordens_exibicao["ATRASADA"].sum()) if not ordens_exibicao.empty else 0, "Status pendente com data vencida")
 with k3:
     producao = int((ordens_exibicao["ABA_ORIGEM"] == "Produ\u00e7\u00e3o").sum()) if not ordens_exibicao.empty else 0
-    render_kpi("Producao", producao, "Produtos novos para montar")
+    render_kpi("Produção", producao, "Produtos novos para montar")
 with k4:
     manutencao_pecas = int(ordens_exibicao["ABA_ORIGEM"].isin(["Manuten\u00e7\u00e3o", "Pe\u00e7as"]).sum()) if not ordens_exibicao.empty else 0
-    render_kpi("Manutencao e pecas", manutencao_pecas, "Demandas de reparo ou falta de pecas")
+    render_kpi("Manutenção e peças", manutencao_pecas, "Demandas de reparo ou falta de peças")
 
-st.markdown('<div class="panel-title">Demandas do usuario</div>', unsafe_allow_html=True)
+st.markdown('<div class="panel-title">Demandas do usuário</div>', unsafe_allow_html=True)
 if ordens_exibicao.empty:
-    st.markdown('<div class="empty">Nada pendente para este usuario.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="empty">Nada pendente para este usuário.</div>', unsafe_allow_html=True)
 else:
     with st.container(key="cards_lista"):
         for _, linha in ordens_exibicao.iterrows():
