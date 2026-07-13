@@ -247,6 +247,26 @@ def aplicar_estilo():
             background: #ffffff !important;
         }
 
+        div[data-testid="stTextInput"] > div,
+        div[data-testid="stNumberInput"] > div,
+        div[data-testid="stDateInput"] > div,
+        div[data-testid="stSelectbox"] > div {
+            border: 2px solid #000000 !important;
+            border-radius: 8px !important;
+            background: #ffffff !important;
+            box-shadow: none !important;
+            min-height: 40px !important;
+            overflow: hidden !important;
+        }
+
+        div[data-testid="stTextInput"] div[data-baseweb="input"],
+        div[data-testid="stNumberInput"] div[data-baseweb="input"],
+        div[data-testid="stDateInput"] div[data-baseweb="input"],
+        div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
+            border: 0 !important;
+            background: transparent !important;
+        }
+
         div[data-testid="stTextInput"] input,
         div[data-testid="stNumberInput"] input,
         div[data-testid="stDateInput"] input {
@@ -254,18 +274,32 @@ def aplicar_estilo():
             box-shadow: none !important;
             outline: none !important;
             background: transparent !important;
+            min-height: 36px !important;
+            color: #000000 !important;
+            -webkit-text-fill-color: #000000 !important;
+        }
+
+        div[data-testid="stTextInput"] input:disabled,
+        div[data-testid="stTextInput"] input[disabled] {
+            color: #000000 !important;
+            -webkit-text-fill-color: #000000 !important;
+            opacity: 1 !important;
         }
 
         div[data-testid="stTextInput"],
         div[data-testid="stNumberInput"],
         div[data-testid="stDateInput"],
         div[data-testid="stSelectbox"] {
-            margin-bottom: 8px !important;
+            margin-bottom: 12px !important;
         }
 
         div[data-testid="stNumberInput"] button {
+            border: 2px solid #000000 !important;
             border-radius: 6px !important;
             min-height: 40px !important;
+            width: 38px !important;
+            background: #ffffff !important;
+            margin-left: 2px !important;
         }
 
         button {
@@ -279,7 +313,7 @@ def aplicar_estilo():
         label, [data-testid="stWidgetLabel"] p {
             font-size: 11px !important;
             font-weight: 800 !important;
-            margin-bottom: 6px !important;
+            margin-bottom: 8px !important;
             line-height: 1.2 !important;
         }
 
@@ -289,11 +323,11 @@ def aplicar_estilo():
         }
 
         div[data-testid="column"] {
-            gap: .55rem !important;
+            gap: .7rem !important;
         }
 
         div[data-testid="stVerticalBlock"] {
-            gap: .5rem !important;
+            gap: .65rem !important;
         }
 
         div[data-testid="stVerticalBlockBorderWrapper"] {
@@ -485,7 +519,7 @@ with st.container(border=True):
 
     with col_form:
         st.markdown('<div class="op-subtitle">Dados principais</div>', unsafe_allow_html=True)
-        linha1 = st.columns([0.17, 0.20, 0.28, 0.35])
+        linha1 = st.columns([0.16, 0.24, 0.28, 0.32])
         with linha1[0]:
             op = st.text_input("N da OP", value=op_sugerida)
         with linha1[1]:
