@@ -1103,6 +1103,52 @@ def historico_realizado(historico):
     return historico[movimentos | legado_sem_acao].copy()
 
 
+def status_quantidade_por_ordem(programacao, historico):
+    colunas = ["STATUS", "Quantidade"]
+    if programacao.empty:
+        return pd.DataFrame(columns=colunas)
+
+    chaves_programacao = pd.DataFrame(
+        {
+            "SETOR": _serie_chave_setor(programacao, "ABA_ORIGEM"),
+            "OP": _serie_chave_texto(programacao, "OP"),
+            "CODIGO": _serie_chave_texto(programacao, "COD_PRODUTO"),
+            "Programado": pd.to_numeric(programacao["QUANTIDADE_NUM"], errors="coerce").fillna(0),
+        }
+    )
+    programado = (
+        chaves_programacao.groupby(["SETOR", "OP", "CODIGO"], dropna=False, as_index=False)["Programado"]
+        .sum()
+    )
+
+    if historico.empty:
+        realizado = pd.DataFrame(columns=["SETOR", "OP", "CODIGO", "Realizado"])
+    else:
+        chaves_historico = pd.DataFrame(
+            {
+                "SETOR": _serie_chave_setor(historico, "SETOR"),
+                "OP": _serie_chave_texto(historico, "OP"),
+                "CODIGO": _serie_chave_texto(historico, "CODIGO"),
+                "Realizado": pd.to_numeric(historico["QUANTIDADE_NUM"], errors="coerce").fillna(0),
+            }
+        )
+        realizado = (
+            chaves_historico.groupby(["SETOR", "OP", "CODIGO"], dropna=False, as_index=False)["Realizado"]
+            .sum()
+        )
+
+    resumo = programado.merge(realizado, on=["SETOR", "OP", "CODIGO"], how="left").fillna({"Realizado": 0})
+    ok = resumo[["Programado", "Realizado"]].min(axis=1).sum()
+    pendente = (resumo["Programado"] - resumo["Realizado"]).clip(lower=0).sum()
+
+    dados = []
+    if ok > 0:
+        dados.append({"STATUS": "OK", "Quantidade": ok})
+    if pendente > 0:
+        dados.append({"STATUS": "PENDENTE", "Quantidade": pendente})
+    return pd.DataFrame(dados, columns=colunas)
+
+
 def formatar_numero(valor):
     valor = float(valor or 0)
     if valor.is_integer():
@@ -1936,20 +1982,21 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
         fig.update_xaxes(tickangle=-35)
         cards.append(montar_chart_html("Ordens por usuário", fig=fig))
 
-    if programacao.empty:
+    status_ordens = status_quantidade_por_ordem(programacao, historico)
+    if status_ordens.empty:
         cards.append(montar_chart_html("Status das ordens"))
     else:
-        status_ordens = (
-            programacao.groupby("STATUS", as_index=False)
-            .agg(Ordens=("OP", "count"))
-            .sort_values("Ordens", ascending=False)
-        )
+        status_ordens = status_ordens.sort_values("Quantidade", ascending=False)
         fig = px.pie(
             status_ordens,
             names="STATUS",
-            values="Ordens",
+            values="Quantidade",
             hole=0.58,
-            color_discrete_sequence=["#ff8f70", "#89d47f", "#f2c94c", "#6fb6ff"],
+            color="STATUS",
+            color_discrete_map={
+                "OK": "#89d47f",
+                "PENDENTE": "#ff8f70",
+            },
         )
         cards.append(montar_chart_html("Status das ordens", fig=grafico_pizza_base(fig)))
 
