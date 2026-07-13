@@ -1230,11 +1230,11 @@ def _copiar_formatos_planejamento(worksheet, linha_inserida, largura, novo_bloco
         requests.append(_request_copiar_formato(sheet_id, 1, linha_inserida, largura))
         requests.append(_request_copiar_formato(sheet_id, 2, linha_inserida + 1, largura))
         requests.append(_request_copiar_formato(sheet_id, 3, linha_inserida + 2, largura))
-        requests.append(_request_altura_linha(sheet_id, linha_inserida + 2, 28))
+        requests.append(_request_altura_linha(sheet_id, linha_inserida + 2, 18))
     else:
         requests.append(_request_copiar_formato(sheet_id, 2, linha_inserida, largura))
         requests.append(_request_copiar_formato(sheet_id, 3, linha_inserida + 1, largura))
-        requests.append(_request_altura_linha(sheet_id, linha_inserida + 1, 28))
+        requests.append(_request_altura_linha(sheet_id, linha_inserida + 1, 18))
     if requests:
         abrir_planilha().batch_update({"requests": requests})
 
