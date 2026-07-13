@@ -39,6 +39,7 @@ def render_sidebar_brand():
     )
 
 
+@st.cache_data(show_spinner=False)
 def _imagem_base64(caminho):
     caminho = Path(caminho)
     tipo = "image/bmp" if caminho.suffix.lower() == ".bmp" else "image/png"

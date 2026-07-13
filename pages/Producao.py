@@ -591,6 +591,7 @@ def origem_chave(origem):
     }.get(str(origem), "ordem")
 
 
+@st.cache_data(show_spinner=False)
 def icone_base64(nome_arquivo):
     return base64.b64encode(Path(nome_arquivo).read_bytes()).decode("utf-8")
 
