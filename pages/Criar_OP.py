@@ -254,9 +254,14 @@ def aplicar_estilo():
             border: 2px solid #000000 !important;
             border-radius: 8px !important;
             background: #ffffff !important;
+            background-color: #ffffff !important;
             box-shadow: none !important;
             min-height: 40px !important;
             overflow: hidden !important;
+        }
+
+        div[data-testid="stNumberInput"] > div {
+            overflow: visible !important;
         }
 
         div[data-testid="stTextInput"] div[data-baseweb="input"],
@@ -271,8 +276,15 @@ def aplicar_estilo():
         div[data-testid="stNumberInput"] div[data-baseweb="input"] *,
         div[data-testid="stDateInput"] div[data-baseweb="input"] *,
         div[data-testid="stSelectbox"] div[data-baseweb="select"] *,
+        div[data-testid="stSelectbox"] div[data-baseweb="select"],
+        div[data-testid="stSelectbox"] div[role="combobox"],
+        div[data-testid="stSelectbox"] div[role="combobox"] *,
+        div[data-testid="stNumberInput"] > div *,
+        div[data-testid="stDateInput"] > div *,
+        div[data-testid="stTextInput"] > div *,
         div[data-testid="stTextArea"] textarea,
         div[data-testid="stTextArea"] textarea * {
+            background: #ffffff !important;
             background-color: #ffffff !important;
         }
 
@@ -319,9 +331,10 @@ def aplicar_estilo():
             border: 2px solid #000000 !important;
             border-radius: 6px !important;
             min-height: 40px !important;
-            width: 38px !important;
+            width: 34px !important;
             background: #ffffff !important;
-            margin-left: 2px !important;
+            margin-left: 3px !important;
+            flex: 0 0 34px !important;
         }
 
         button {
