@@ -1022,7 +1022,7 @@ def render_metricas(programacao, historico):
     programado = programacao["QUANTIDADE_NUM"].sum() if not programacao.empty else 0
     realizado = historico["QUANTIDADE_NUM"].sum() if not historico.empty else 0
     atrasadas = int(programacao["ATRASADA"].sum()) if not programacao.empty else 0
-    pendente = programacao["SALDO_NUM"].sum() if not programacao.empty else 0
+    pendente = max(programado - realizado, 0)
 
     metricas = [
         ("Ordens programadas", total_ordens),
@@ -1317,7 +1317,7 @@ def montar_programados_produto_html(programacao, historico):
         else pd.DataFrame(columns=["COD_PRODUTO", "PRODUTO", "Realizado"])
     )
     produtos = produtos.merge(realizado_produtos, on=["COD_PRODUTO", "PRODUTO"], how="outer")
-    produtos["Quantidade"] = produtos["Quantidade"].fillna(produtos["Realizado"]).fillna(0)
+    produtos["Quantidade"] = produtos["Quantidade"].fillna(0)
     produtos["Realizado"] = produtos["Realizado"].fillna(0)
     produtos["Ordens"] = produtos["Ordens"].fillna(0)
     produtos = (
@@ -1862,9 +1862,9 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
 
     comparativo_programado = (
         programacao.groupby("USUARIO_RESPONSAVEL", as_index=False)
-        .agg(Programado=("QUANTIDADE_NUM", "sum"), Pendente=("SALDO_NUM", "sum"))
+        .agg(Programado=("QUANTIDADE_NUM", "sum"))
         if not programacao.empty
-        else pd.DataFrame(columns=["USUARIO_RESPONSAVEL", "Programado", "Pendente"])
+        else pd.DataFrame(columns=["USUARIO_RESPONSAVEL", "Programado"])
     )
     historico_comparativo = responsavel_comparativo_historico(historico)
     comparativo_realizado = (
@@ -1880,8 +1880,9 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
         comparativo = pd.concat([comparativo, comparativo_execucao], ignore_index=True, sort=False)
         comparativo = (
             comparativo.groupby("USUARIO_RESPONSAVEL", as_index=False)
-            .agg(Programado=("Programado", "sum"), Realizado=("Realizado", "sum"), Pendente=("Pendente", "sum"))
+            .agg(Programado=("Programado", "sum"), Realizado=("Realizado", "sum"))
         )
+    comparativo["Pendente"] = (comparativo["Programado"] - comparativo["Realizado"]).clip(lower=0)
 
     if comparativo.empty:
         cards.append(montar_chart_html("Programado x realizado"))
@@ -1963,7 +1964,6 @@ def render_tabela_resumo(programacao, historico):
         .agg(
             Ordens=("OP", "count"),
             Programado=("QUANTIDADE_NUM", "sum"),
-            Pendente=("SALDO_NUM", "sum"),
             Atrasadas=("ATRASADA", "sum"),
         )
     )
@@ -1974,6 +1974,7 @@ def render_tabela_resumo(programacao, historico):
         else pd.DataFrame(columns=["USUARIO_RESPONSAVEL", "Realizado"])
     )
     resumo = resumo.merge(realizado, on="USUARIO_RESPONSAVEL", how="left").fillna(0)
+    resumo["Pendente"] = (resumo["Programado"] - resumo["Realizado"]).clip(lower=0)
     resumo["Aproveitamento"] = resumo.apply(
         lambda linha: f"{round((linha['Realizado'] / linha['Programado']) * 100, 1)}%" if linha["Programado"] else "0%",
         axis=1,
