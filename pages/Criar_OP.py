@@ -264,7 +264,16 @@ def aplicar_estilo():
         div[data-testid="stDateInput"] div[data-baseweb="input"],
         div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
             border: 0 !important;
-            background: transparent !important;
+            background: #ffffff !important;
+        }
+
+        div[data-testid="stTextInput"] div[data-baseweb="input"] *,
+        div[data-testid="stNumberInput"] div[data-baseweb="input"] *,
+        div[data-testid="stDateInput"] div[data-baseweb="input"] *,
+        div[data-testid="stSelectbox"] div[data-baseweb="select"] *,
+        div[data-testid="stTextArea"] textarea,
+        div[data-testid="stTextArea"] textarea * {
+            background-color: #ffffff !important;
         }
 
         div[data-testid="stTextInput"] input,
@@ -273,16 +282,29 @@ def aplicar_estilo():
             border: 0 !important;
             box-shadow: none !important;
             outline: none !important;
-            background: transparent !important;
+            background: #ffffff !important;
+            background-color: #ffffff !important;
             min-height: 36px !important;
             color: #000000 !important;
             -webkit-text-fill-color: #000000 !important;
         }
 
         div[data-testid="stTextInput"] input:disabled,
-        div[data-testid="stTextInput"] input[disabled] {
+        div[data-testid="stTextInput"] input[disabled],
+        div[data-testid="stTextInput"] div[data-baseweb="input"]:has(input:disabled),
+        div[data-testid="stTextInput"] div[data-baseweb="input"]:has(input[disabled]) {
+            background: #ffffff !important;
+            background-color: #ffffff !important;
             color: #000000 !important;
             -webkit-text-fill-color: #000000 !important;
+            opacity: 1 !important;
+        }
+
+        div[data-testid="stTextInput"] input::placeholder,
+        div[data-testid="stNumberInput"] input::placeholder,
+        div[data-testid="stDateInput"] input::placeholder {
+            background: #ffffff !important;
+            color: #6b7280 !important;
             opacity: 1 !important;
         }
 
