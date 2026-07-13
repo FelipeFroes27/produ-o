@@ -1589,7 +1589,12 @@ def montar_leadtime_tabela_html(titulo, leadtime, coluna_nome, vazio, coluna_tem
             else linha["Tempo_total_horas"],
             axis=1,
         )
-        resumo = resumo.sort_values(["Media_horas", "Ordens"], ascending=[True, False]).head(10)
+        resumo["Media_minutos_arredondada"] = (resumo["Media_horas"] * 60).round()
+        resumo = resumo[
+            (resumo["Quantidade_total"] > 0)
+            & (resumo["Media_minutos_arredondada"] > 0)
+        ].copy()
+        resumo = resumo.sort_values(["Quantidade_total", "Media_horas"], ascending=[False, False]).head(10)
     else:
         leadtime = leadtime[leadtime[coluna_tempo].notna()].copy()
         if leadtime.empty:
@@ -1607,13 +1612,17 @@ def montar_leadtime_tabela_html(titulo, leadtime, coluna_nome, vazio, coluna_tem
     for linha in resumo.itertuples(index=False):
         nome = escape(str(getattr(linha, coluna_nome)) or "Sem identificacao")
         duracao = escape(formatar_duracao_horas(linha.Media_horas))
-        ordens = int(linha.Ordens)
+        quantidade_label = (
+            f"{formatar_numero(linha.Quantidade_total)} produto(s)"
+            if total_por_quantidade and hasattr(linha, "Quantidade_total")
+            else f"{int(linha.Ordens)} ordem(ns)"
+        )
         linhas.append(
             f"""
             <div class="lead-row">
                 <div class="lead-name" title="{nome}">{nome}</div>
                 <div class="lead-time">{duracao}</div>
-                <div class="lead-count">{ordens} ordem(ns)</div>
+                <div class="lead-count">{escape(quantidade_label)}</div>
             </div>
             """
         )
