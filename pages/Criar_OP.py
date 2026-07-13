@@ -399,7 +399,7 @@ def aplicar_estilo():
             margin-top: 10px !important;
         }
 
-        .st-key-criar_op_sugestao div[data-testid="stVerticalBlockBorderWrapper"] {
+        .st-key-criar_op_sugestao_card div[data-testid="stVerticalBlockBorderWrapper"] {
             min-height: 118px !important;
         }
 
@@ -644,7 +644,7 @@ with st.container(border=True):
                 qtd_pecas = st.number_input("Qtd. pecas", min_value=0, value=0, step=1)
 
     with col_sugestoes:
-        with st.container(border=True, key="criar_op_sugestao"):
+        with st.container(border=True, key="criar_op_sugestao_card"):
             st.markdown('<div class="op-suggestion-title">Itens mais usados</div>', unsafe_allow_html=True)
             st.markdown('<div class="op-side-note">Use a lista apenas como atalho. Ao escolher um item, o codigo e preenchido automaticamente.</div>', unsafe_allow_html=True)
             rotulos_sugestoes = [""] + [rotulo_sugestao(item) for _, item in sugestoes.iterrows()]
