@@ -496,8 +496,9 @@ def proxima_op(ordens, aba):
     return str(max(numeros) + 1)
 
 
-def aplicar_sugestao(codigo):
+def aplicar_sugestao(codigo, produto=""):
     st.session_state["criar_op_codigo_pendente"] = str(codigo)
+    st.session_state["criar_op_produto_pendente"] = str(produto)
     st.rerun()
 
 
@@ -532,6 +533,9 @@ except Exception as exc:
 codigo_pendente = st.session_state.pop("criar_op_codigo_pendente", None)
 if codigo_pendente is not None:
     st.session_state["criar_op_codigo"] = str(codigo_pendente)
+    produto_pendente = st.session_state.pop("criar_op_produto_pendente", "")
+    st.session_state["criar_op_produto_sugerido_codigo"] = str(codigo_pendente)
+    st.session_state["criar_op_produto_sugerido"] = str(produto_pendente)
 
 codigo_atual = st.session_state.get("criar_op_codigo", "")
 produto_encontrado = produto_por_codigo(produtos, codigo_atual)
@@ -592,7 +596,10 @@ with st.container(border=True):
         with linha2[0]:
             codigo = st.text_input("Codigo do item", key="criar_op_codigo")
         produto_encontrado = produto_por_codigo(produtos, codigo)
-        produto_padrao = produto_encontrado["PRODUTO"] if produto_encontrado else ""
+        produto_sugerido_codigo = str(st.session_state.get("criar_op_produto_sugerido_codigo", "")).strip()
+        produto_sugerido = str(st.session_state.get("criar_op_produto_sugerido", "")).strip()
+        produto_sugerido_valido = produto_sugerido and produto_sugerido_codigo == str(codigo).strip()
+        produto_padrao = produto_encontrado["PRODUTO"] if produto_encontrado else (produto_sugerido if produto_sugerido_valido else "")
         with linha2[1]:
             produto = st.text_input(
                 "Descricao do item",
@@ -610,11 +617,13 @@ with st.container(border=True):
             if detalhes:
                 info_item += " | " + " | ".join(detalhes)
             st.markdown(f'<div class="op-hint">{info_item}</div>', unsafe_allow_html=True)
-        elif codigo:
+        elif codigo and not produto_sugerido_valido:
             st.markdown(
                 '<div class="op-hint">Codigo nao localizado no Bd_produtos. Preencha a descricao manualmente para cadastrar atividade extra.</div>',
                 unsafe_allow_html=True,
             )
+        elif codigo and produto_sugerido_valido:
+            st.markdown('<div class="op-hint"></div>', unsafe_allow_html=True)
         else:
             st.markdown('<div class="op-hint"></div>', unsafe_allow_html=True)
 
@@ -644,9 +653,13 @@ with st.container(border=True):
             rotulos_sugestoes = [""] + [rotulo_sugestao(item) for _, item in sugestoes.iterrows()]
             sugestao = st.selectbox("Usar sugestao", rotulos_sugestoes, label_visibility="collapsed")
             if sugestao:
-                codigo_sugerido = sugestao.split("|", 1)[0].strip()
-                if codigo_sugerido != str(st.session_state.get("criar_op_codigo", "")).strip():
-                    aplicar_sugestao(codigo_sugerido)
+                partes_sugestao = [parte.strip() for parte in sugestao.split("|")]
+                codigo_sugerido = partes_sugestao[0] if partes_sugestao else ""
+                produto_sugerido = partes_sugestao[1] if len(partes_sugestao) > 1 else ""
+                codigo_atual_sugestao = str(st.session_state.get("criar_op_codigo", "")).strip()
+                produto_atual_sugestao = str(st.session_state.get("criar_op_produto_sugerido", "")).strip()
+                if codigo_sugerido != codigo_atual_sugestao or produto_sugerido != produto_atual_sugestao:
+                    aplicar_sugestao(codigo_sugerido, produto_sugerido)
         confirmar = st.button("Criar ordem", use_container_width=True, key="criar_ordem_submit")
 
 if confirmar:
