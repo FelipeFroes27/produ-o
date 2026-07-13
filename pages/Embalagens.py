@@ -723,13 +723,15 @@ def modal_conclusao(item, usuarios):
 
 def render_card_embalagem(item, usuarios):
     chave_css = chave_css_texto(item["COD_PRODUTO"], item["PRODUTO"])
+    key_card = f"embalagem_{chave_css}"
     produto = str(item["PRODUTO"]) or "Produto sem descricao"
     codigo = str(item["COD_PRODUTO"]) or "Sem codigo"
     em_andamento = bool(item.get("EM_ANDAMENTO", False))
     pausada = bool(item.get("PAUSADA", False))
     status_fluxo = "Pausado" if pausada else "Em andamento" if em_andamento else "Aguardando inicio"
 
-    with st.container(border=True, key=f"embalagem_{chave_css}"):
+    aplicar_estilo_card_fluxo(key_card)
+    with st.container(border=True, key=key_card):
         col_info, col_qtd, col_acoes = st.columns([6.6, .85, 1.8], vertical_alignment="center")
         with col_info:
             st.markdown(
@@ -784,6 +786,46 @@ def render_card_embalagem(item, usuarios):
                 desabilitado = pausada or not em_andamento
                 if st.button("Concluir", key=key, help="Concluir embalagem", disabled=desabilitado):
                     modal_conclusao(item, usuarios)
+
+
+def aplicar_estilo_card_fluxo(key):
+    st.markdown(
+        f"""
+        <style>
+        .st-key-{key},
+        .st-key-{key} > div,
+        .st-key-{key}[data-testid="stVerticalBlockBorderWrapper"],
+        .st-key-{key}[data-testid="stVerticalBlockBorder"],
+        .st-key-{key} [data-testid="stVerticalBlockBorderWrapper"],
+        .st-key-{key} [data-testid="stVerticalBlockBorder"],
+        .st-key-{key} [data-testid="stVerticalBlock"] {{
+            background: #ffffff !important;
+        }}
+
+        .st-key-{key} {{
+            border: 2px solid #000000 !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
+            overflow: hidden !important;
+        }}
+
+        .st-key-{key}[data-testid="stVerticalBlockBorderWrapper"],
+        .st-key-{key} [data-testid="stVerticalBlockBorderWrapper"] {{
+            border: 2px solid #000000 !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
+        }}
+
+        .st-key-{key}[data-testid="stVerticalBlockBorder"],
+        .st-key-{key} [data-testid="stVerticalBlockBorder"] {{
+            border: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def opcoes_encaminhamento(ordens, historico):

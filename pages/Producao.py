@@ -652,6 +652,13 @@ def aplicar_estilo_card(key, cor):
             background: {cor} !important;
         }}
 
+        .st-key-{key} {{
+            border: 2px solid #000000 !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
+            overflow: hidden !important;
+        }}
+
         .st-key-{key}[data-testid="stVerticalBlockBorderWrapper"],
         .st-key-{key} [data-testid="stVerticalBlockBorderWrapper"] {{
             border: 2px solid #000000 !important;
