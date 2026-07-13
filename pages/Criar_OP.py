@@ -235,13 +235,15 @@ def aplicar_estilo():
             white-space: nowrap;
         }
 
-        div[data-baseweb="input"],
-        div[data-baseweb="select"] > div,
-        textarea {
+        div[data-testid="stTextInput"] div[data-baseweb="input"],
+        div[data-testid="stNumberInput"] div[data-baseweb="input"],
+        div[data-testid="stDateInput"] div[data-baseweb="input"],
+        div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+        div[data-testid="stTextArea"] textarea {
             border: 2px solid #000000 !important;
             border-radius: 8px !important;
             box-shadow: none !important;
-            min-height: 36px !important;
+            min-height: 40px !important;
             background: #ffffff !important;
         }
 
@@ -254,8 +256,16 @@ def aplicar_estilo():
             background: transparent !important;
         }
 
+        div[data-testid="stTextInput"],
+        div[data-testid="stNumberInput"],
+        div[data-testid="stDateInput"],
+        div[data-testid="stSelectbox"] {
+            margin-bottom: 8px !important;
+        }
+
         div[data-testid="stNumberInput"] button {
             border-radius: 6px !important;
+            min-height: 40px !important;
         }
 
         button {
@@ -269,7 +279,8 @@ def aplicar_estilo():
         label, [data-testid="stWidgetLabel"] p {
             font-size: 11px !important;
             font-weight: 800 !important;
-            margin-bottom: 2px !important;
+            margin-bottom: 6px !important;
+            line-height: 1.2 !important;
         }
 
         [data-testid="stAlert"] {
@@ -278,11 +289,11 @@ def aplicar_estilo():
         }
 
         div[data-testid="column"] {
-            gap: .35rem !important;
+            gap: .55rem !important;
         }
 
         div[data-testid="stVerticalBlock"] {
-            gap: .35rem !important;
+            gap: .5rem !important;
         }
 
         div[data-testid="stVerticalBlockBorderWrapper"] {
@@ -474,7 +485,7 @@ with st.container(border=True):
 
     with col_form:
         st.markdown('<div class="op-subtitle">Dados principais</div>', unsafe_allow_html=True)
-        linha1 = st.columns([0.18, 0.18, 0.28, 0.36])
+        linha1 = st.columns([0.17, 0.20, 0.28, 0.35])
         with linha1[0]:
             op = st.text_input("N da OP", value=op_sugerida)
         with linha1[1]:
@@ -485,7 +496,7 @@ with st.container(border=True):
             usuarios_lista = [""] + nomes_usuarios(usuarios)
             responsavel = st.selectbox("Responsavel", usuarios_lista)
 
-        linha2 = st.columns([0.24, 0.76])
+        linha2 = st.columns([0.25, 0.75])
         with linha2[0]:
             codigo = st.text_input("Codigo do item", key="criar_op_codigo")
         produto_encontrado = produto_por_codigo(produtos, codigo)
@@ -512,7 +523,7 @@ with st.container(border=True):
         else:
             st.markdown('<div class="op-hint"></div>', unsafe_allow_html=True)
 
-        linha3 = st.columns([0.24, 0.76])
+        linha3 = st.columns([0.25, 0.75])
         with linha3[0]:
             data_abertura = st.date_input("Data de abertura", format="DD/MM/YYYY")
         with linha3[1]:
