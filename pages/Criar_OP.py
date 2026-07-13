@@ -237,14 +237,25 @@ def aplicar_estilo():
 
         div[data-baseweb="input"],
         div[data-baseweb="select"] > div,
-        textarea,
-        div[data-testid="stDateInput"] input,
-        div[data-testid="stNumberInput"] input {
+        textarea {
             border: 2px solid #000000 !important;
             border-radius: 8px !important;
             box-shadow: none !important;
             min-height: 36px !important;
             background: #ffffff !important;
+        }
+
+        div[data-testid="stTextInput"] input,
+        div[data-testid="stNumberInput"] input,
+        div[data-testid="stDateInput"] input {
+            border: 0 !important;
+            box-shadow: none !important;
+            outline: none !important;
+            background: transparent !important;
+        }
+
+        div[data-testid="stNumberInput"] button {
+            border-radius: 6px !important;
         }
 
         button {
@@ -282,6 +293,10 @@ def aplicar_estilo():
             min-height: 40px !important;
             font-size: 13px !important;
             background: #ffffff !important;
+        }
+
+        .st-key-criar_op_sugestao div[data-testid="stVerticalBlockBorderWrapper"] {
+            min-height: 128px !important;
         }
 
         @media (max-width: 1100px) {
@@ -465,7 +480,7 @@ with st.container(border=True):
         with linha1[1]:
             quantidade = st.number_input("Quantidade", min_value=1, value=1, step=1)
         with linha1[2]:
-            data_prevista = st.date_input("Data prevista")
+            data_prevista = st.date_input("Data prevista", format="DD/MM/YYYY")
         with linha1[3]:
             usuarios_lista = [""] + nomes_usuarios(usuarios)
             responsavel = st.selectbox("Responsavel", usuarios_lista)
@@ -495,11 +510,11 @@ with st.container(border=True):
         elif codigo:
             st.warning("Codigo nao encontrado no Bd_produtos. Confira o codigo ou preencha a descricao manualmente.")
         else:
-            st.markdown(f'<div class="op-hint">Proxima OP sugerida para {aba}: {op_sugerida}</div>', unsafe_allow_html=True)
+            st.markdown('<div class="op-hint"></div>', unsafe_allow_html=True)
 
         linha3 = st.columns([0.24, 0.76])
         with linha3[0]:
-            data_abertura = st.date_input("Data de abertura")
+            data_abertura = st.date_input("Data de abertura", format="DD/MM/YYYY")
         with linha3[1]:
             obs = st.text_input("Observacoes")
 
@@ -517,7 +532,7 @@ with st.container(border=True):
                 qtd_pecas = st.number_input("Qtd. pecas", min_value=0, value=0, step=1)
 
     with col_sugestoes:
-        with st.container(border=True):
+        with st.container(border=True, key="criar_op_sugestao"):
             st.markdown('<div class="op-suggestion-title">Itens mais usados</div>', unsafe_allow_html=True)
             st.markdown('<div class="op-side-note">Use a lista apenas como atalho. Ao escolher um item, o codigo e preenchido automaticamente.</div>', unsafe_allow_html=True)
             rotulos_sugestoes = [""] + [rotulo_sugestao(item) for _, item in sugestoes.iterrows()]
@@ -526,17 +541,6 @@ with st.container(border=True):
                 codigo_sugerido = sugestao.split("|", 1)[0].strip()
                 if codigo_sugerido != str(st.session_state.get("criar_op_codigo", "")).strip():
                     aplicar_sugestao(codigo_sugerido)
-            for _, item in sugestoes.head(5).iterrows():
-                st.markdown(
-                    f"""
-                    <div class="op-suggestion-row">
-                        <strong>{item['COD_PRODUTO']}</strong>
-                        <span title="{item['PRODUTO']}">{item['PRODUTO']}</span>
-                        <strong>{numero(item['Ordens'])} OP</strong>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
 
     acao_col1, acao_col2 = st.columns([0.72, 0.28])
     with acao_col2:
