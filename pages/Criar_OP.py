@@ -62,8 +62,8 @@ def aplicar_estilo():
 
         .block-container,
         [data-testid="stMainBlockContainer"] {
-            max-width: 1480px;
-            padding-top: .25rem;
+            max-width: 1240px;
+            padding-top: 2.35rem;
             padding-bottom: .7rem;
         }
 
@@ -91,13 +91,13 @@ def aplicar_estilo():
             align-items: flex-end;
             justify-content: space-between;
             gap: .3cm;
-            margin: 0 0 10px 0;
+            margin: 0 0 8px 0;
         }
 
         .page-head h1 {
             margin: 0;
             color: #000000;
-            font-size: 24px;
+            font-size: 26px;
             line-height: 1.1;
             font-weight: 900;
         }
@@ -113,12 +113,69 @@ def aplicar_estilo():
             margin-bottom: 0.25rem;
         }
 
-        .op-shell {
+        .op-toolbar {
+            display: grid;
+            grid-template-columns: 1.1fr .9fr .9fr;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .op-toolbar-card {
             border: 2px solid #000000;
             border-radius: 8px;
-            background: #ffffff;
-            padding: 12px;
-            margin-top: 10px;
+            padding: 8px 10px;
+            background: #f8f8f8;
+            min-height: 50px;
+        }
+
+        .op-toolbar-label {
+            color: #333333;
+            font-size: 11px;
+            font-weight: 800;
+            margin-bottom: 2px;
+        }
+
+        .op-toolbar-value {
+            color: #000000;
+            font-size: 17px;
+            font-weight: 900;
+            line-height: 1.15;
+        }
+
+        .op-work-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid #000000;
+            padding-bottom: 8px;
+            margin-bottom: 10px;
+        }
+
+        .op-work-title strong {
+            color: #000000;
+            font-size: 15px;
+            font-weight: 900;
+        }
+
+        .op-work-title span {
+            color: #333333;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .op-subtitle {
+            color: #000000;
+            font-size: 13px;
+            font-weight: 900;
+            margin: 0 0 6px 0;
+        }
+
+        .op-side-note {
+            color: #333333;
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1.3;
+            margin: -2px 0 6px 0;
         }
 
         .op-section-title {
@@ -135,7 +192,7 @@ def aplicar_estilo():
             font-size: 12px;
             font-weight: 750;
             min-height: 18px;
-            margin-top: 2px;
+            margin: -2px 0 4px 0;
         }
 
         .op-suggestion-box {
@@ -186,7 +243,7 @@ def aplicar_estilo():
             border: 2px solid #000000 !important;
             border-radius: 8px !important;
             box-shadow: none !important;
-            min-height: 38px !important;
+            min-height: 36px !important;
             background: #ffffff !important;
         }
 
@@ -199,7 +256,7 @@ def aplicar_estilo():
         }
 
         label, [data-testid="stWidgetLabel"] p {
-            font-size: 12px !important;
+            font-size: 11px !important;
             font-weight: 800 !important;
             margin-bottom: 2px !important;
         }
@@ -210,11 +267,27 @@ def aplicar_estilo():
         }
 
         div[data-testid="column"] {
-            gap: .45rem !important;
+            gap: .35rem !important;
         }
 
         div[data-testid="stVerticalBlock"] {
-            gap: .45rem !important;
+            gap: .35rem !important;
+        }
+
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            background: #ffffff !important;
+        }
+
+        .st-key-criar_ordem_submit button {
+            min-height: 40px !important;
+            font-size: 13px !important;
+            background: #ffffff !important;
+        }
+
+        @media (max-width: 1100px) {
+            .op-toolbar {
+                grid-template-columns: 1fr;
+            }
         }
         </style>
         """,
@@ -228,8 +301,8 @@ def render_sidebar():
         st.image("icones/Logo Branco.bmp", width=72)
         st.image("icones/logo preto goper.png", width=32)
         st.markdown("</div>", unsafe_allow_html=True)
-        page_link_icon("app.py", "Inicio", "icones/menu.png")
-        page_link_icon("pages/Criar_OP.py", "Criar OP", "icones/menu.png")
+        page_link_icon("app.py", "Inicio", "icones/logo preto goper.png")
+        page_link_icon("pages/Criar_OP.py", "Criar OP", "icones/producao.png")
         page_link_icon("pages/Producao.py", "Producao", "icones/producao.png")
         page_link_icon("pages/Qualidade.py", "Qualidade", "icones/qualidade.png")
         page_link_icon("pages/Embalagens.py", "Embalagens", "icones/embalagem.png")
@@ -347,24 +420,57 @@ produto_encontrado = produto_por_codigo(produtos, codigo_atual)
 sugestoes = sugestoes_itens(ordens)
 
 with st.container(border=True):
-    st.markdown('<div class="op-section-title">Dados da ordem</div>', unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div class="op-work-title">
+            <strong>Cadastro da ordem</strong>
+            <span>Preencha, confira o item e grave direto no planejamento</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    col_form, col_sugestoes = st.columns([0.72, 0.28], gap="medium")
+    seletor_setor, espaco_setor = st.columns([0.28, 0.72])
+    with seletor_setor:
+        aba = st.selectbox("Setor", ABAS_PLANEJAMENTO, key="criar_op_setor")
+    op_sugerida = proxima_op(ordens, aba)
+
+    st.markdown(
+        f"""
+        <div class="op-toolbar">
+            <div class="op-toolbar-card">
+                <div class="op-toolbar-label">SETOR SELECIONADO</div>
+                <div class="op-toolbar-value">{aba}</div>
+            </div>
+            <div class="op-toolbar-card">
+                <div class="op-toolbar-label">PROXIMA OP SUGERIDA</div>
+                <div class="op-toolbar-value">{op_sugerida}</div>
+            </div>
+            <div class="op-toolbar-card">
+                <div class="op-toolbar-label">CADASTRO</div>
+                <div class="op-toolbar-value">Planejamento semanal</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    col_form, col_sugestoes = st.columns([0.68, 0.32], gap="medium")
 
     with col_form:
-        linha1 = st.columns([0.22, 0.16, 0.16, 0.46])
+        st.markdown('<div class="op-subtitle">Dados principais</div>', unsafe_allow_html=True)
+        linha1 = st.columns([0.18, 0.18, 0.28, 0.36])
         with linha1[0]:
-            aba = st.selectbox("Setor", ABAS_PLANEJAMENTO, key="criar_op_setor")
-        with linha1[1]:
-            op_sugerida = proxima_op(ordens, aba)
             op = st.text_input("N da OP", value=op_sugerida)
-        with linha1[2]:
+        with linha1[1]:
             quantidade = st.number_input("Quantidade", min_value=1, value=1, step=1)
+        with linha1[2]:
+            data_prevista = st.date_input("Data prevista")
         with linha1[3]:
             usuarios_lista = [""] + nomes_usuarios(usuarios)
             responsavel = st.selectbox("Responsavel", usuarios_lista)
 
-        linha2 = st.columns([0.23, 0.77])
+        linha2 = st.columns([0.24, 0.76])
         with linha2[0]:
             codigo = st.text_input("Codigo do item", key="criar_op_codigo")
         produto_encontrado = produto_por_codigo(produtos, codigo)
@@ -391,12 +497,10 @@ with st.container(border=True):
         else:
             st.markdown(f'<div class="op-hint">Proxima OP sugerida para {aba}: {op_sugerida}</div>', unsafe_allow_html=True)
 
-        linha3 = st.columns([0.22, 0.22, 0.56])
+        linha3 = st.columns([0.24, 0.76])
         with linha3[0]:
             data_abertura = st.date_input("Data de abertura")
         with linha3[1]:
-            data_prevista = st.date_input("Data prevista")
-        with linha3[2]:
             obs = st.text_input("Observacoes")
 
         cod_peca = ""
@@ -415,6 +519,7 @@ with st.container(border=True):
     with col_sugestoes:
         with st.container(border=True):
             st.markdown('<div class="op-suggestion-title">Itens mais usados</div>', unsafe_allow_html=True)
+            st.markdown('<div class="op-side-note">Use a lista apenas como atalho. Ao escolher um item, o codigo e preenchido automaticamente.</div>', unsafe_allow_html=True)
             rotulos_sugestoes = [""] + [rotulo_sugestao(item) for _, item in sugestoes.iterrows()]
             sugestao = st.selectbox("Usar sugestao", rotulos_sugestoes, label_visibility="collapsed")
             if sugestao:
@@ -433,9 +538,9 @@ with st.container(border=True):
                     unsafe_allow_html=True,
                 )
 
-    acao_col1, acao_col2 = st.columns([0.78, 0.22])
+    acao_col1, acao_col2 = st.columns([0.72, 0.28])
     with acao_col2:
-        confirmar = st.button("Criar ordem", use_container_width=True)
+        confirmar = st.button("Criar ordem", use_container_width=True, key="criar_ordem_submit")
 
 if confirmar:
     descricao_final = produto_encontrado["PRODUTO"] if produto_encontrado else produto
