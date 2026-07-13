@@ -634,26 +634,35 @@ def programacao_fluxo_historico(historico):
 
     partes = []
 
-    entradas_qualidade = dados[
-        (dados["ACAO_BASE"] == "ENTRADA")
+    inicios_qualidade = dados[
+        (dados["ACAO_BASE"] == "INICIO")
         & (dados["SETOR"] == "Qualidade")
-        & (dados["QUANTIDADE_NUM"] > 0)
     ].copy()
     movimentos_qualidade = dados[
         dados["ACAO_BASE"].isin(ACOES_MOVIMENTO_DASHBOARD)
         & (dados["SETOR"] == "Qualidade")
         & (dados["QUANTIDADE_NUM"] > 0)
     ].copy()
-    if not entradas_qualidade.empty:
+    if not inicios_qualidade.empty:
         chaves_qualidade = ["OP", "CODIGO", "PRODUTO", "SETOR"]
+        quantidades_qualidade = (
+            movimentos_qualidade.groupby(chaves_qualidade, dropna=False)["QUANTIDADE_NUM"]
+            .sum()
+            .rename("QUANTIDADE_NUM")
+            .reset_index()
+            if not movimentos_qualidade.empty
+            else pd.DataFrame(columns=[*chaves_qualidade, "QUANTIDADE_NUM"])
+        )
         programado = (
-            entradas_qualidade.groupby(chaves_qualidade, dropna=False)
+            inicios_qualidade.groupby(chaves_qualidade, dropna=False)
             .agg(
                 DATA_PRIORIDADE=("DATA", "min"),
-                QUANTIDADE_NUM=("QUANTIDADE_NUM", "sum"),
             )
             .reset_index()
+            .merge(quantidades_qualidade, on=chaves_qualidade, how="left")
         )
+        programado["QUANTIDADE_NUM"] = pd.to_numeric(programado["QUANTIDADE_NUM"], errors="coerce").fillna(0)
+        programado = programado[programado["QUANTIDADE_NUM"] > 0].copy()
         realizado = (
             movimentos_qualidade.groupby(chaves_qualidade, dropna=False)["QUANTIDADE_NUM"]
             .sum()
@@ -662,28 +671,38 @@ def programacao_fluxo_historico(historico):
             if not movimentos_qualidade.empty
             else pd.DataFrame(columns=[*chaves_qualidade, "REALIZADO_NUM"])
         )
-        partes.append(programado.merge(realizado, on=chaves_qualidade, how="left"))
+        if not programado.empty:
+            partes.append(programado.merge(realizado, on=chaves_qualidade, how="left"))
 
-    entradas_embalagem = dados[
-        (dados["ACAO_BASE"] == "ENTRADA")
+    inicios_embalagem = dados[
+        (dados["ACAO_BASE"] == "INICIO")
         & (dados["SETOR"] == "Embalagem")
-        & (dados["QUANTIDADE_NUM"] > 0)
     ].copy()
     movimentos_embalagem = dados[
         dados["ACAO_BASE"].isin(ACOES_MOVIMENTO_DASHBOARD)
         & (dados["SETOR"] == "Embalagem")
         & (dados["QUANTIDADE_NUM"] > 0)
     ].copy()
-    if not entradas_embalagem.empty:
-        chaves_embalagem = ["CODIGO", "PRODUTO", "SETOR"]
+    if not inicios_embalagem.empty:
+        chaves_embalagem = ["OP", "CODIGO", "PRODUTO", "SETOR"]
+        quantidades_embalagem = (
+            movimentos_embalagem.groupby(chaves_embalagem, dropna=False)["QUANTIDADE_NUM"]
+            .sum()
+            .rename("QUANTIDADE_NUM")
+            .reset_index()
+            if not movimentos_embalagem.empty
+            else pd.DataFrame(columns=[*chaves_embalagem, "QUANTIDADE_NUM"])
+        )
         programado = (
-            entradas_embalagem.groupby(chaves_embalagem, dropna=False)
+            inicios_embalagem.groupby(chaves_embalagem, dropna=False)
             .agg(
                 DATA_PRIORIDADE=("DATA", "min"),
-                QUANTIDADE_NUM=("QUANTIDADE_NUM", "sum"),
             )
             .reset_index()
+            .merge(quantidades_embalagem, on=chaves_embalagem, how="left")
         )
+        programado["QUANTIDADE_NUM"] = pd.to_numeric(programado["QUANTIDADE_NUM"], errors="coerce").fillna(0)
+        programado = programado[programado["QUANTIDADE_NUM"] > 0].copy()
         realizado = (
             movimentos_embalagem.groupby(chaves_embalagem, dropna=False)["QUANTIDADE_NUM"]
             .sum()
@@ -692,9 +711,9 @@ def programacao_fluxo_historico(historico):
             if not movimentos_embalagem.empty
             else pd.DataFrame(columns=[*chaves_embalagem, "REALIZADO_NUM"])
         )
-        embalagem = programado.merge(realizado, on=chaves_embalagem, how="left")
-        embalagem["OP"] = ""
-        partes.append(embalagem)
+        if not programado.empty:
+            embalagem = programado.merge(realizado, on=chaves_embalagem, how="left")
+            partes.append(embalagem)
 
     if not partes:
         return pd.DataFrame(columns=colunas)
@@ -809,6 +828,80 @@ def opcoes_combobox(serie):
     return ["Todos", *valores]
 
 
+def _serie_chave_texto(dados, coluna):
+    if coluna not in dados.columns:
+        return pd.Series("", index=dados.index, dtype="object")
+    return dados[coluna].fillna("").astype(str).str.strip().str.upper()
+
+
+def _normalizar_setor_chave(valor):
+    texto = str(valor or "").strip().upper()
+    texto = (
+        texto.replace("Ç", "C")
+        .replace("Ã", "A")
+        .replace("Á", "A")
+        .replace("Â", "A")
+        .replace("É", "E")
+        .replace("Ê", "E")
+        .replace("Í", "I")
+        .replace("Ó", "O")
+        .replace("Õ", "O")
+        .replace("Ô", "O")
+        .replace("Ú", "U")
+    )
+    if texto.startswith("PRODU"):
+        return "PRODUCAO"
+    if texto.startswith("MANUTEN"):
+        return "MANUTENCAO"
+    if texto.startswith("PEC") or texto.startswith("PE"):
+        return "PECAS"
+    if texto.startswith("QUALIDADE"):
+        return "QUALIDADE"
+    if texto.startswith("EMBALAGEM"):
+        return "EMBALAGEM"
+    return texto
+
+
+def _serie_chave_setor(dados, coluna):
+    if coluna not in dados.columns:
+        return pd.Series("", index=dados.index, dtype="object")
+    return dados[coluna].map(_normalizar_setor_chave)
+
+
+def _chaves_programacao_periodo(programacao):
+    if programacao.empty:
+        return set()
+
+    chaves = pd.DataFrame(
+        {
+            "SETOR": _serie_chave_setor(programacao, "ABA_ORIGEM"),
+            "OP": _serie_chave_texto(programacao, "OP"),
+            "CODIGO": _serie_chave_texto(programacao, "COD_PRODUTO"),
+        }
+    )
+    chaves = chaves[(chaves["SETOR"] != "") & (chaves["OP"] != "") & (chaves["CODIGO"] != "")]
+    return set(chaves.itertuples(index=False, name=None))
+
+
+def filtrar_historico_pelas_ordens_periodo(historico, programacao):
+    if historico.empty or programacao.empty:
+        return historico.iloc[0:0].copy()
+
+    chaves_validas = _chaves_programacao_periodo(programacao)
+    if not chaves_validas:
+        return historico.iloc[0:0].copy()
+
+    chaves_historico = pd.DataFrame(
+        {
+            "SETOR": _serie_chave_setor(historico, "SETOR"),
+            "OP": _serie_chave_texto(historico, "OP"),
+            "CODIGO": _serie_chave_texto(historico, "CODIGO"),
+        }
+    )
+    mascara = chaves_historico.apply(tuple, axis=1).isin(chaves_validas)
+    return historico[mascara].copy()
+
+
 def aplicar_filtros(programacao, historico):
     usuarios_base = pd.concat(
         [
@@ -887,9 +980,7 @@ def aplicar_filtros(programacao, historico):
         programacao = programacao[programacao["GRUPO"].astype(str).str.strip() == grupo_selecionado]
         historico = historico[historico["GRUPO"].astype(str).str.strip() == grupo_selecionado]
 
-    datas_programacao = programacao["DATA_PRIORIDADE"].dropna() if "DATA_PRIORIDADE" in programacao else pd.Series(dtype="datetime64[ns]")
-    datas_historico = historico["DATA"].dropna() if "DATA" in historico else pd.Series(dtype="datetime64[ns]")
-    datas_disponiveis = pd.concat([datas_programacao, datas_historico], ignore_index=True).dropna()
+    datas_disponiveis = programacao["DATA_PRIORIDADE"].dropna() if "DATA_PRIORIDADE" in programacao else pd.Series(dtype="datetime64[ns]")
     datas_disponiveis = pd.to_datetime(datas_disponiveis, errors="coerce").dropna()
 
     modo_data = st.selectbox("Período", ["Tudo", "Mês inteiro", "Dia específico", "Intervalo"])
@@ -958,6 +1049,8 @@ def aplicar_filtros(programacao, historico):
                 (historico["DATA"] >= data_inicio)
                 & (historico["DATA"] <= data_fim)
             ]
+
+    historico = filtrar_historico_pelas_ordens_periodo(historico, programacao)
 
     return programacao, historico, contexto_periodo
 
