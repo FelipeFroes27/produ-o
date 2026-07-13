@@ -247,6 +247,21 @@ def aplicar_estilo():
             background: #ffffff !important;
         }
 
+        div[data-testid="stTextInput"] *,
+        div[data-testid="stNumberInput"] *,
+        div[data-testid="stDateInput"] *,
+        div[data-testid="stSelectbox"] * {
+            background-color: #ffffff !important;
+        }
+
+        div[data-testid="stTextInput"],
+        div[data-testid="stNumberInput"],
+        div[data-testid="stDateInput"],
+        div[data-testid="stSelectbox"] {
+            background: #ffffff !important;
+            background-color: #ffffff !important;
+        }
+
         div[data-testid="stTextInput"] > div,
         div[data-testid="stNumberInput"] > div,
         div[data-testid="stDateInput"] > div,
@@ -309,6 +324,15 @@ def aplicar_estilo():
             background-color: #ffffff !important;
             color: #000000 !important;
             -webkit-text-fill-color: #000000 !important;
+            opacity: 1 !important;
+        }
+
+        div[data-testid="stTextInput"]:has(input:disabled),
+        div[data-testid="stTextInput"]:has(input[disabled]),
+        div[data-testid="stTextInput"]:has(input:disabled) *,
+        div[data-testid="stTextInput"]:has(input[disabled]) * {
+            background: #ffffff !important;
+            background-color: #ffffff !important;
             opacity: 1 !important;
         }
 
@@ -558,7 +582,7 @@ with st.container(border=True):
         with linha1[0]:
             op = st.text_input("N da OP", value=op_sugerida)
         with linha1[1]:
-            quantidade = st.number_input("Quantidade", min_value=1, value=1, step=1)
+            quantidade_texto = st.text_input("Quantidade", value="1")
         with linha1[2]:
             data_prevista = st.date_input("Data prevista", format="DD/MM/YYYY")
         with linha1[3]:
@@ -629,6 +653,11 @@ with st.container(border=True):
 if confirmar:
     descricao_final = produto_encontrado["PRODUTO"] if produto_encontrado else produto
     erros = []
+    try:
+        quantidade = int(str(quantidade_texto).strip())
+    except (TypeError, ValueError):
+        quantidade = 0
+
     if not str(op).strip():
         erros.append("Informe o numero da OP.")
     if not str(codigo).strip():
