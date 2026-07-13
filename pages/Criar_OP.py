@@ -399,6 +399,10 @@ def aplicar_estilo():
             background: #ffffff !important;
         }
 
+        .st-key-criar_ordem_submit {
+            margin-top: 12px !important;
+        }
+
         .st-key-criar_op_sugestao div[data-testid="stVerticalBlockBorderWrapper"] {
             min-height: 128px !important;
         }
@@ -645,9 +649,6 @@ with st.container(border=True):
                 codigo_sugerido = sugestao.split("|", 1)[0].strip()
                 if codigo_sugerido != str(st.session_state.get("criar_op_codigo", "")).strip():
                     aplicar_sugestao(codigo_sugerido)
-
-    acao_col1, acao_col2 = st.columns([0.72, 0.28])
-    with acao_col2:
         confirmar = st.button("Criar ordem", use_container_width=True, key="criar_ordem_submit")
 
 if confirmar:
