@@ -113,31 +113,25 @@ def aplicar_estilo():
             margin-bottom: 0.25rem;
         }
 
-        .op-toolbar {
-            display: grid;
-            grid-template-columns: 1.1fr .9fr .9fr;
-            gap: 10px;
-            margin: 10px 0;
-        }
-
-        .op-toolbar-card {
+        .op-top-card {
             border: 2px solid #000000;
             border-radius: 8px;
-            padding: 8px 10px;
-            background: #f8f8f8;
-            min-height: 50px;
+            padding: 9px 12px;
+            background: #ffffff;
+            min-height: 44px;
+            margin-top: 20px;
         }
 
-        .op-toolbar-label {
+        .op-top-label {
             color: #333333;
             font-size: 11px;
             font-weight: 800;
             margin-bottom: 2px;
         }
 
-        .op-toolbar-value {
+        .op-top-value {
             color: #000000;
-            font-size: 17px;
+            font-size: 16px;
             font-weight: 900;
             line-height: 1.15;
         }
@@ -167,7 +161,9 @@ def aplicar_estilo():
             color: #000000;
             font-size: 13px;
             font-weight: 900;
-            margin: 0 0 6px 0;
+            margin: 0 0 10px 0;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #000000;
         }
 
         .op-side-note {
@@ -400,18 +396,13 @@ def aplicar_estilo():
         }
 
         .st-key-criar_ordem_submit {
-            margin-top: 12px !important;
+            margin-top: 10px !important;
         }
 
         .st-key-criar_op_sugestao div[data-testid="stVerticalBlockBorderWrapper"] {
-            min-height: 128px !important;
+            min-height: 118px !important;
         }
 
-        @media (max-width: 1100px) {
-            .op-toolbar {
-                grid-template-columns: 1fr;
-            }
-        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -553,32 +544,32 @@ with st.container(border=True):
         unsafe_allow_html=True,
     )
 
-    seletor_setor, espaco_setor = st.columns([0.28, 0.72])
-    with seletor_setor:
+    topo_setor, topo_op, topo_cadastro = st.columns([0.34, 0.33, 0.33], gap="medium")
+    with topo_setor:
         aba = st.selectbox("Setor", ABAS_PLANEJAMENTO, key="criar_op_setor")
     op_sugerida = proxima_op(ordens, aba)
+    with topo_op:
+        st.markdown(
+            f"""
+            <div class="op-top-card">
+                <div class="op-top-label">PROXIMA OP SUGERIDA</div>
+                <div class="op-top-value">{op_sugerida}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with topo_cadastro:
+        st.markdown(
+            """
+            <div class="op-top-card">
+                <div class="op-top-label">CADASTRO</div>
+                <div class="op-top-value">Planejamento semanal</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    st.markdown(
-        f"""
-        <div class="op-toolbar">
-            <div class="op-toolbar-card">
-                <div class="op-toolbar-label">SETOR SELECIONADO</div>
-                <div class="op-toolbar-value">{aba}</div>
-            </div>
-            <div class="op-toolbar-card">
-                <div class="op-toolbar-label">PROXIMA OP SUGERIDA</div>
-                <div class="op-toolbar-value">{op_sugerida}</div>
-            </div>
-            <div class="op-toolbar-card">
-                <div class="op-toolbar-label">CADASTRO</div>
-                <div class="op-toolbar-value">Planejamento semanal</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    col_form, col_sugestoes = st.columns([0.68, 0.32], gap="medium")
+    col_form, col_sugestoes = st.columns([0.70, 0.30], gap="medium")
 
     with col_form:
         st.markdown('<div class="op-subtitle">Dados principais</div>', unsafe_allow_html=True)
