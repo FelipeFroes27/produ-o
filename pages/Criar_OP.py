@@ -497,7 +497,7 @@ def proxima_op(ordens, aba):
 
 
 def aplicar_sugestao(codigo):
-    st.session_state["criar_op_codigo"] = str(codigo)
+    st.session_state["criar_op_codigo_pendente"] = str(codigo)
     st.rerun()
 
 
@@ -528,6 +528,10 @@ except Exception as exc:
     st.error("Nao foi possivel carregar os dados da planilha.")
     st.caption(str(exc))
     st.stop()
+
+codigo_pendente = st.session_state.pop("criar_op_codigo_pendente", None)
+if codigo_pendente is not None:
+    st.session_state["criar_op_codigo"] = str(codigo_pendente)
 
 codigo_atual = st.session_state.get("criar_op_codigo", "")
 produto_encontrado = produto_por_codigo(produtos, codigo_atual)
