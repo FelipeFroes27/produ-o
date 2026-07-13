@@ -496,10 +496,14 @@ def proxima_op(ordens, aba):
     return str(max(numeros) + 1)
 
 
-def aplicar_sugestao(codigo, produto=""):
-    st.session_state["criar_op_codigo_pendente"] = str(codigo)
-    st.session_state["criar_op_produto_pendente"] = str(produto)
-    st.rerun()
+def aplicar_sugestao_selecionada():
+    sugestao = st.session_state.get("criar_op_sugestao", "")
+    dados = st.session_state.get("criar_op_sugestoes_map", {}).get(sugestao)
+    if not dados:
+        return
+    st.session_state["criar_op_codigo"] = str(dados["codigo"])
+    st.session_state["criar_op_produto_sugerido_codigo"] = str(dados["codigo"])
+    st.session_state["criar_op_produto_sugerido"] = str(dados["produto"])
 
 
 def rotulo_sugestao(item):
@@ -529,13 +533,6 @@ except Exception as exc:
     st.error("Nao foi possivel carregar os dados da planilha.")
     st.caption(str(exc))
     st.stop()
-
-codigo_pendente = st.session_state.pop("criar_op_codigo_pendente", None)
-if codigo_pendente is not None:
-    st.session_state["criar_op_codigo"] = str(codigo_pendente)
-    produto_pendente = st.session_state.pop("criar_op_produto_pendente", "")
-    st.session_state["criar_op_produto_sugerido_codigo"] = str(codigo_pendente)
-    st.session_state["criar_op_produto_sugerido"] = str(produto_pendente)
 
 codigo_atual = st.session_state.get("criar_op_codigo", "")
 produto_encontrado = produto_por_codigo(produtos, codigo_atual)
@@ -651,15 +648,20 @@ with st.container(border=True):
             st.markdown('<div class="op-suggestion-title">Itens mais usados</div>', unsafe_allow_html=True)
             st.markdown('<div class="op-side-note">Use a lista apenas como atalho. Ao escolher um item, o codigo e preenchido automaticamente.</div>', unsafe_allow_html=True)
             rotulos_sugestoes = [""] + [rotulo_sugestao(item) for _, item in sugestoes.iterrows()]
-            sugestao = st.selectbox("Usar sugestao", rotulos_sugestoes, label_visibility="collapsed")
-            if sugestao:
-                partes_sugestao = [parte.strip() for parte in sugestao.split("|")]
-                codigo_sugerido = partes_sugestao[0] if partes_sugestao else ""
-                produto_sugerido = partes_sugestao[1] if len(partes_sugestao) > 1 else ""
-                codigo_atual_sugestao = str(st.session_state.get("criar_op_codigo", "")).strip()
-                produto_atual_sugestao = str(st.session_state.get("criar_op_produto_sugerido", "")).strip()
-                if codigo_sugerido != codigo_atual_sugestao or produto_sugerido != produto_atual_sugestao:
-                    aplicar_sugestao(codigo_sugerido, produto_sugerido)
+            st.session_state["criar_op_sugestoes_map"] = {
+                rotulo_sugestao(item): {
+                    "codigo": str(item["COD_PRODUTO"]).strip(),
+                    "produto": str(item["PRODUTO"]).strip(),
+                }
+                for _, item in sugestoes.iterrows()
+            }
+            st.selectbox(
+                "Usar sugestao",
+                rotulos_sugestoes,
+                key="criar_op_sugestao",
+                label_visibility="collapsed",
+                on_change=aplicar_sugestao_selecionada,
+            )
         confirmar = st.button("Criar ordem", use_container_width=True, key="criar_ordem_submit")
 
 if confirmar:
