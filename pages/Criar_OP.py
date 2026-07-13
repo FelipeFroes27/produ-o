@@ -611,7 +611,10 @@ with st.container(border=True):
                 info_item += " | " + " | ".join(detalhes)
             st.markdown(f'<div class="op-hint">{info_item}</div>', unsafe_allow_html=True)
         elif codigo:
-            st.warning("Codigo nao encontrado no Bd_produtos. Confira o codigo ou preencha a descricao manualmente.")
+            st.markdown(
+                '<div class="op-hint">Codigo nao localizado no Bd_produtos. Preencha a descricao manualmente para cadastrar atividade extra.</div>',
+                unsafe_allow_html=True,
+            )
         else:
             st.markdown('<div class="op-hint"></div>', unsafe_allow_html=True)
 
