@@ -644,7 +644,7 @@ def programacao_fluxo_historico(historico):
         & (dados["QUANTIDADE_NUM"] > 0)
     ].copy()
     if not inicios_qualidade.empty:
-        chaves_qualidade = ["OP", "CODIGO", "PRODUTO", "SETOR"]
+        chaves_qualidade = ["USUARIO_RESPONSAVEL", "OP", "CODIGO", "PRODUTO", "SETOR"]
         quantidades_qualidade = (
             movimentos_qualidade.groupby(chaves_qualidade, dropna=False)["QUANTIDADE_NUM"]
             .sum()
@@ -684,7 +684,7 @@ def programacao_fluxo_historico(historico):
         & (dados["QUANTIDADE_NUM"] > 0)
     ].copy()
     if not inicios_embalagem.empty:
-        chaves_embalagem = ["OP", "CODIGO", "PRODUTO", "SETOR"]
+        chaves_embalagem = ["USUARIO_RESPONSAVEL", "OP", "CODIGO", "PRODUTO", "SETOR"]
         quantidades_embalagem = (
             movimentos_embalagem.groupby(chaves_embalagem, dropna=False)["QUANTIDADE_NUM"]
             .sum()
@@ -724,7 +724,6 @@ def programacao_fluxo_historico(historico):
     fluxo["STATUS"] = fluxo["SALDO_NUM"].apply(lambda saldo: "OK" if saldo <= 0 else "PENDENTE")
     fluxo["ATRASADA"] = False
     fluxo = fluxo.rename(columns={"CODIGO": "COD_PRODUTO", "SETOR": "ABA_ORIGEM"})
-    fluxo["USUARIO_RESPONSAVEL"] = fluxo["ABA_ORIGEM"]
 
     for coluna in colunas:
         if coluna not in fluxo.columns:
@@ -737,84 +736,19 @@ def responsavel_comparativo_historico(historico):
         return historico
 
     dados = historico.copy()
-    if "SETOR" not in dados.columns:
-        dados["SETOR"] = dados["ACAO"].map(acao_etapa_historico).map(SETOR_NORMALIZADO_PARA_LABEL).fillna("")
-    setores_fluxo = dados["SETOR"].isin(["Qualidade", "Embalagem"])
     dados["RESPONSAVEL_COMPARATIVO"] = dados["USUARIO_RESPONSAVEL"]
-    dados.loc[setores_fluxo, "RESPONSAVEL_COMPARATIVO"] = dados.loc[setores_fluxo, "SETOR"]
     return dados
-
-
-def comparativo_execucao_fluxo_usuario(historico):
-    colunas = ["USUARIO_RESPONSAVEL", "Programado", "Realizado", "Pendente"]
-    if historico.empty:
-        return pd.DataFrame(columns=colunas)
-
-    dados = historico.copy()
-    if "ACAO_BASE" not in dados.columns:
-        dados["ACAO_BASE"] = dados["ACAO"].map(acao_base_historico)
-    if "SETOR" not in dados.columns:
-        dados["SETOR"] = dados["ACAO"].map(acao_etapa_historico).map(SETOR_NORMALIZADO_PARA_LABEL).fillna("")
-
-    dados = dados[
-        dados["SETOR"].isin(["Qualidade", "Embalagem"])
-        & dados["ACAO_BASE"].isin(ACOES_MOVIMENTO_DASHBOARD)
-        & (dados["QUANTIDADE_NUM"] > 0)
-    ].copy()
-    if dados.empty:
-        return pd.DataFrame(columns=colunas)
-
-    execucao = (
-        dados.groupby("USUARIO_RESPONSAVEL", as_index=False)
-        .agg(Realizado=("QUANTIDADE_NUM", "sum"))
-    )
-    execucao["Programado"] = execucao["Realizado"]
-    execucao["Pendente"] = 0
-    return execucao[colunas]
 
 
 def ordens_por_usuario_dashboard(programacao, historico):
     colunas = ["USUARIO_RESPONSAVEL", "Ordens"]
-    partes = []
-
-    if not programacao.empty:
-        planejamento = programacao[
-            ~programacao["ABA_ORIGEM"].isin(["Qualidade", "Embalagem"])
-        ].copy()
-        if not planejamento.empty:
-            partes.append(
-                planejamento.groupby("USUARIO_RESPONSAVEL", as_index=False)
-                .agg(Ordens=("OP", "count"))
-            )
-
-    if not historico.empty:
-        dados = historico.copy()
-        if "ACAO_BASE" not in dados.columns:
-            dados["ACAO_BASE"] = dados["ACAO"].map(acao_base_historico)
-        if "SETOR" not in dados.columns:
-            dados["SETOR"] = dados["ACAO"].map(acao_etapa_historico).map(SETOR_NORMALIZADO_PARA_LABEL).fillna("")
-
-        fluxo = dados[
-            dados["SETOR"].isin(["Qualidade", "Embalagem"])
-            & dados["ACAO_BASE"].isin(ACOES_MOVIMENTO_DASHBOARD)
-            & (dados["QUANTIDADE_NUM"] > 0)
-        ].copy()
-        if not fluxo.empty:
-            fluxo = fluxo.drop_duplicates(
-                subset=["USUARIO_RESPONSAVEL", "SETOR", "OP", "CODIGO", "PRODUTO"]
-            )
-            partes.append(
-                fluxo.groupby("USUARIO_RESPONSAVEL", as_index=False)
-                .agg(Ordens=("OP", "count"))
-            )
-
-    if not partes:
+    if programacao.empty:
         return pd.DataFrame(columns=colunas)
 
     return (
-        pd.concat(partes, ignore_index=True, sort=False)
+        programacao.drop_duplicates(subset=["USUARIO_RESPONSAVEL", "ABA_ORIGEM", "OP", "COD_PRODUTO"])
         .groupby("USUARIO_RESPONSAVEL", as_index=False)
-        .agg(Ordens=("Ordens", "sum"))
+        .agg(Ordens=("OP", "count"))
         .sort_values("Ordens", ascending=False)
     )
 
@@ -1442,32 +1376,35 @@ def montar_programados_produto_html(programacao, historico):
         return montar_chart_html("Itens programados no período", vazio="Sem itens programados no período.")
 
     produtos = (
-        programacao.groupby(["COD_PRODUTO", "PRODUTO"], as_index=False)
-        .agg(Quantidade=("QUANTIDADE_NUM", "sum"), Ordens=("OP", "count"))
+        programacao.groupby("COD_PRODUTO", as_index=False)
+        .agg(
+            PRODUTO=("PRODUTO", "first"),
+            Quantidade=("QUANTIDADE_NUM", "sum"),
+            Ordens=("OP", "count"),
+        )
         .sort_values(["Quantidade", "Ordens"], ascending=False)
         if not programacao.empty
         else pd.DataFrame(columns=["COD_PRODUTO", "PRODUTO", "Quantidade", "Ordens"])
     )
     realizado_produtos = (
-        historico.groupby(["CODIGO", "PRODUTO"], as_index=False)
+        historico.groupby("CODIGO", as_index=False)
         .agg(Realizado=("QUANTIDADE_NUM", "sum"))
         .rename(columns={"CODIGO": "COD_PRODUTO"})
         if not historico.empty
-        else pd.DataFrame(columns=["COD_PRODUTO", "PRODUTO", "Realizado"])
+        else pd.DataFrame(columns=["COD_PRODUTO", "Realizado"])
     )
-    produtos = produtos.merge(realizado_produtos, on=["COD_PRODUTO", "PRODUTO"], how="outer")
+    produtos = produtos.merge(realizado_produtos, on="COD_PRODUTO", how="outer")
+    produtos["PRODUTO"] = produtos["PRODUTO"].fillna("Produto sem descricao")
     produtos["Quantidade"] = produtos["Quantidade"].fillna(0)
     produtos["Realizado"] = produtos["Realizado"].fillna(0)
     produtos["Ordens"] = produtos["Ordens"].fillna(0)
     produtos = (
         produtos[(produtos["Quantidade"] > 0) | (produtos["Realizado"] > 0)]
         .sort_values(["Quantidade", "Realizado", "Ordens"], ascending=False)
-        .head(12)
     )
     if produtos.empty:
         return montar_chart_html("Itens programados no período", vazio="Sem itens programados no período.")
 
-    maior_valor = max(float(produtos["Quantidade"].max()), 1)
     itens = []
     for linha in produtos.itertuples(index=False):
         codigo = escape(str(linha.COD_PRODUTO) or "Sem código")
@@ -1477,8 +1414,12 @@ def montar_programados_produto_html(programacao, historico):
         quantidade = formatar_numero(quantidade_num)
         realizado = formatar_numero(realizado_num)
         ordens = int(linha.Ordens)
-        largura_programado = max(7, min(100, (quantidade_num / maior_valor) * 100))
-        largura_realizado = min(largura_programado, max(0, (realizado_num / maior_valor) * 100))
+        largura_programado = 100 if quantidade_num > 0 else 0
+        largura_realizado = (
+            100
+            if quantidade_num <= 0 and realizado_num > 0
+            else min(100, max(0, (realizado_num / quantidade_num) * 100 if quantidade_num else 0))
+        )
         itens.append(
             f"""
             <div class="product-row">
@@ -2015,13 +1956,6 @@ def render_graficos(programacao, historico, contexto_periodo, historico_leadtime
         else pd.DataFrame(columns=["USUARIO_RESPONSAVEL", "Realizado"])
     )
     comparativo = comparativo_programado.merge(comparativo_realizado, on="USUARIO_RESPONSAVEL", how="outer").fillna(0)
-    comparativo_execucao = comparativo_execucao_fluxo_usuario(historico)
-    if not comparativo_execucao.empty:
-        comparativo = pd.concat([comparativo, comparativo_execucao], ignore_index=True, sort=False)
-        comparativo = (
-            comparativo.groupby("USUARIO_RESPONSAVEL", as_index=False)
-            .agg(Programado=("Programado", "sum"), Realizado=("Realizado", "sum"))
-        )
     comparativo["Pendente"] = (comparativo["Programado"] - comparativo["Realizado"]).clip(lower=0)
 
     if comparativo.empty:
