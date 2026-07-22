@@ -1671,7 +1671,7 @@ def montar_leadtime_tabela_html(titulo, leadtime, coluna_nome, vazio, coluna_tem
             (resumo["Quantidade_total"] > 0)
             & (resumo["Media_minutos_arredondada"] > 0)
         ].copy()
-        resumo = resumo.sort_values(["Quantidade_total", "Media_horas"], ascending=[False, False]).head(10)
+        resumo = resumo.sort_values(["Quantidade_total", "Media_horas"], ascending=[False, False])
     else:
         leadtime = leadtime[leadtime[coluna_tempo].notna()].copy()
         if leadtime.empty:
