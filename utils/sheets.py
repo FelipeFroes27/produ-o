@@ -1,3 +1,4 @@
+import threading
 import unicodedata
 from datetime import datetime, timedelta, timezone
 
@@ -7,6 +8,8 @@ import streamlit as st
 from gspread.utils import rowcol_to_a1
 from google.oauth2.service_account import Credentials
 
+
+_SHEETS_LOCK = threading.RLock()
 
 SPREADSHEET_ID = "10_J6pYgEcQNNQjwWIZCaeNPeOo928GoQ3zENwpLtWSc"
 ABAS_PLANEJAMENTO = ["Produ\u00e7\u00e3o", "Manuten\u00e7\u00e3o", "Pe\u00e7as"]
@@ -323,46 +326,48 @@ def lancar_realizacao(ordem, quantidade_lancada, qualidade=False):
     if quantidade_lancada <= 0:
         raise ValueError("Informe uma quantidade maior que zero.")
 
-    ultima_acao = ultima_acao_controle_ordem(ordem)
-    if ultima_acao != "INICIO":
-        if ultima_acao == "PAUSA":
-            raise ValueError("Retome a ordem antes de concluir.")
-        raise ValueError("Inicie a ordem antes de concluir.")
+    with _SHEETS_LOCK:
+        ultima_acao = ultima_acao_controle_ordem(ordem)
+        if ultima_acao != "INICIO":
+            if ultima_acao == "PAUSA":
+                raise ValueError("Retome a ordem antes de concluir.")
+            raise ValueError("Inicie a ordem antes de concluir.")
 
-    worksheet = abrir_planilha().worksheet(aba_origem)
-    headers = worksheet.row_values(1)
-    coluna_realizado = _indice_coluna(headers, "REALIZADO")
-    realizado_atual = _numero_celula(worksheet.cell(linha_planilha, coluna_realizado).value)
-    saldo = max(float(ordem["QUANTIDADE_NUM"]) - realizado_atual, 0)
+        worksheet = abrir_planilha().worksheet(aba_origem)
+        headers = worksheet.row_values(1)
+        _confirmar_linha_ordem(worksheet, headers, linha_planilha, ordem)
+        coluna_realizado = _indice_coluna(headers, "REALIZADO")
+        realizado_atual = _numero_celula(worksheet.cell(linha_planilha, coluna_realizado).value)
+        saldo = max(float(ordem["QUANTIDADE_NUM"]) - realizado_atual, 0)
 
-    if quantidade_lancada > saldo:
-        raise ValueError(f"A quantidade lancada passa do saldo pendente ({_formatar_numero(saldo)}).")
+        if quantidade_lancada > saldo:
+            raise ValueError(f"A quantidade lancada passa do saldo pendente ({_formatar_numero(saldo)}).")
 
-    novo_realizado = realizado_atual + quantidade_lancada
-    quantidade_total = float(ordem["QUANTIDADE_NUM"])
-    acao = acao_descritiva("Fim" if novo_realizado >= quantidade_total else "Parcial", ordem.get("ABA_ORIGEM", ""))
+        novo_realizado = realizado_atual + quantidade_lancada
+        quantidade_total = float(ordem["QUANTIDADE_NUM"])
+        acao = acao_descritiva("Fim" if novo_realizado >= quantidade_total else "Parcial", ordem.get("ABA_ORIGEM", ""))
 
-    worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(novo_realizado))
-    try:
-        registros = [{
-            "ordem": ordem,
-            "quantidade": quantidade_lancada,
-            "acao": acao,
-        }]
-        if qualidade:
-            registros.append({
+        worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(novo_realizado))
+        try:
+            registros = [{
                 "ordem": ordem,
                 "quantidade": quantidade_lancada,
-                "acao": acao_descritiva("Entrada", "Qualidade"),
-            })
-        registrar_historico_lote(registros)
-    except Exception as exc:
-        try:
-            worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(realizado_atual))
-            carregar_ordens.clear()
-        except Exception:
-            pass
-        raise RuntimeError("A ordem foi restaurada porque nao foi possivel registrar o historico. Tente novamente.") from exc
+                "acao": acao,
+            }]
+            if qualidade:
+                registros.append({
+                    "ordem": ordem,
+                    "quantidade": quantidade_lancada,
+                    "acao": acao_descritiva("Entrada", "Qualidade"),
+                })
+            registrar_historico_lote(registros)
+        except Exception as exc:
+            try:
+                worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(realizado_atual))
+                carregar_ordens.clear()
+            except Exception:
+                pass
+            raise RuntimeError("A ordem foi restaurada porque nao foi possivel registrar o historico. Tente novamente.") from exc
 
     carregar_ordens.clear()
 
@@ -383,29 +388,50 @@ def lancar_encaminhamento_embalagem(ordem, quantidade):
     carregar_historico.clear()
 
 
+def _confirmar_op_disponivel(values, headers, op_nova):
+    op_nova_norm = _normalizar(op_nova)
+    if not op_nova_norm:
+        return
+
+    col_op = _indice_coluna_opcional(headers, ["N° DA OP", "N DA OP", "OP"])
+    if not col_op:
+        return
+
+    indice = col_op - 1
+    for row in values[1:]:
+        valor_op = str(row[indice]).strip() if indice < len(row) else ""
+        if valor_op and _normalizar(valor_op) == op_nova_norm:
+            raise ValueError(
+                f"Ja existe uma ordem com o numero de OP {op_nova} nesta aba. "
+                "Atualize a pagina para obter um novo numero sugerido e tente novamente."
+            )
+
+
 def criar_ordem_planejamento(aba, dados):
     aba = str(aba or "").strip()
     if aba not in ABAS_PLANEJAMENTO:
         raise ValueError("Escolha uma aba de planejamento valida.")
 
-    worksheet = abrir_planilha().worksheet(aba)
-    headers = [str(header).strip() for header in worksheet.row_values(1) if str(header).strip()]
-    if not headers:
-        headers = CABECALHOS_PLANEJAMENTO[aba]
-    valores = _montar_linha_planejamento(aba, headers, dados)
-    data_bloco = _data_bloco_ordem(aba, dados)
-    if pd.isna(data_bloco):
-        raise ValueError("Informe uma data valida para posicionar a ordem no planejamento.")
+    with _SHEETS_LOCK:
+        worksheet = abrir_planilha().worksheet(aba)
+        headers = [str(header).strip() for header in worksheet.row_values(1) if str(header).strip()]
+        if not headers:
+            headers = CABECALHOS_PLANEJAMENTO[aba]
+        valores = _montar_linha_planejamento(aba, headers, dados)
+        data_bloco = _data_bloco_ordem(aba, dados)
+        if pd.isna(data_bloco):
+            raise ValueError("Informe uma data valida para posicionar a ordem no planejamento.")
 
-    values = worksheet.get_all_values()
-    destino = _localizar_insercao_planejamento(values, headers, data_bloco)
-    linhas = []
-    if destino["novo_bloco"]:
-        linhas.append(headers)
-    linhas.extend([valores, [""] * len(headers)])
+        values = worksheet.get_all_values()
+        _confirmar_op_disponivel(values, headers, dados.get("OP", ""))
+        destino = _localizar_insercao_planejamento(values, headers, data_bloco)
+        linhas = []
+        if destino["novo_bloco"]:
+            linhas.append(headers)
+        linhas.extend([valores, [""] * len(headers)])
 
-    worksheet.insert_rows(linhas, row=destino["linha"], value_input_option="USER_ENTERED")
-    _copiar_formatos_planejamento(worksheet, destino["linha"], len(headers), destino["novo_bloco"])
+        worksheet.insert_rows(linhas, row=destino["linha"], value_input_option="USER_ENTERED")
+        _copiar_formatos_planejamento(worksheet, destino["linha"], len(headers), destino["novo_bloco"])
     carregar_ordens.clear()
     return {
         "aba": aba,
@@ -415,53 +441,57 @@ def criar_ordem_planejamento(aba, dados):
 
 
 def lancar_inicio_ordem(ordem):
-    ultima_acao = ultima_acao_controle_ordem(ordem)
-    if ultima_acao == "INICIO":
-        raise ValueError("Esta ordem ja esta em andamento.")
-    registrar_historico(ordem, 0, acao_descritiva("Inicio", ordem.get("ABA_ORIGEM", "")))
+    with _SHEETS_LOCK:
+        ultima_acao = ultima_acao_controle_ordem(ordem)
+        if ultima_acao == "INICIO":
+            raise ValueError("Esta ordem ja esta em andamento.")
+        registrar_historico(ordem, 0, acao_descritiva("Inicio", ordem.get("ABA_ORIGEM", "")))
     carregar_historico.clear()
 
 
 def lancar_pausa_ordem(ordem):
-    ultima_acao = ultima_acao_controle_ordem(ordem)
-    if ultima_acao != "INICIO":
-        if ultima_acao == "PAUSA":
-            raise ValueError("Esta ordem ja esta pausada.")
-        raise ValueError("Inicie a ordem antes de pausar.")
-    registrar_historico(ordem, 0, acao_descritiva("Pausa", ordem.get("ABA_ORIGEM", "")))
+    with _SHEETS_LOCK:
+        ultima_acao = ultima_acao_controle_ordem(ordem)
+        if ultima_acao != "INICIO":
+            if ultima_acao == "PAUSA":
+                raise ValueError("Esta ordem ja esta pausada.")
+            raise ValueError("Inicie a ordem antes de pausar.")
+        registrar_historico(ordem, 0, acao_descritiva("Pausa", ordem.get("ABA_ORIGEM", "")))
     carregar_historico.clear()
 
 
 def lancar_inicio_setor(ordem, setor, usuario=""):
-    ultima_acao = ultima_acao_setor_ordem(ordem, setor)
-    if ultima_acao == "INICIO":
-        raise ValueError(f"Esta etapa de {str(setor).lower()} ja esta em andamento.")
-    registrar_historico(
-        ordem,
-        0,
-        acao_descritiva("Inicio", setor),
-        avaliador=usuario,
-        usuario_responsavel=usuario,
-    )
+    with _SHEETS_LOCK:
+        ultima_acao = ultima_acao_setor_ordem(ordem, setor)
+        if ultima_acao == "INICIO":
+            raise ValueError(f"Esta etapa de {str(setor).lower()} ja esta em andamento.")
+        registrar_historico(
+            ordem,
+            0,
+            acao_descritiva("Inicio", setor),
+            avaliador=usuario,
+            usuario_responsavel=usuario,
+        )
     carregar_historico.clear()
 
 
 def lancar_pausa_setor(ordem, setor, usuario=""):
-    ultima_acao = ultima_acao_setor_ordem(ordem, setor)
-    if ultima_acao != "INICIO":
-        if ultima_acao == "PAUSA":
-            raise ValueError(f"Esta etapa de {str(setor).lower()} ja esta pausada.")
-        raise ValueError(f"Inicie a etapa de {str(setor).lower()} antes de pausar.")
-    usuario = usuario or ultimo_inicio_ativo_setor_ordem(ordem, setor)
-    if not usuario:
-        raise ValueError(f"Nao foi possivel identificar o usuario que iniciou a etapa de {str(setor).lower()}.")
-    registrar_historico(
-        ordem,
-        0,
-        acao_descritiva("Pausa", setor),
-        avaliador=usuario,
-        usuario_responsavel=usuario,
-    )
+    with _SHEETS_LOCK:
+        ultima_acao = ultima_acao_setor_ordem(ordem, setor)
+        if ultima_acao != "INICIO":
+            if ultima_acao == "PAUSA":
+                raise ValueError(f"Esta etapa de {str(setor).lower()} ja esta pausada.")
+            raise ValueError(f"Inicie a etapa de {str(setor).lower()} antes de pausar.")
+        usuario = usuario or ultimo_inicio_ativo_setor_ordem(ordem, setor)
+        if not usuario:
+            raise ValueError(f"Nao foi possivel identificar o usuario que iniciou a etapa de {str(setor).lower()}.")
+        registrar_historico(
+            ordem,
+            0,
+            acao_descritiva("Pausa", setor),
+            avaliador=usuario,
+            usuario_responsavel=usuario,
+        )
     carregar_historico.clear()
 
 
@@ -470,18 +500,19 @@ def lancar_movimento_setor(ordem, quantidade, setor, usuario="", campo_pendente=
     if quantidade <= 0:
         raise ValueError("Informe uma quantidade maior que zero.")
 
-    ultima_acao = ultima_acao_setor_ordem(ordem, setor)
-    if ultima_acao != "INICIO":
-        if ultima_acao == "PAUSA":
-            raise ValueError(f"Retome a etapa de {str(setor).lower()} antes de concluir.")
-        raise ValueError(f"Inicie a etapa de {str(setor).lower()} antes de concluir.")
+    with _SHEETS_LOCK:
+        ultima_acao = ultima_acao_setor_ordem(ordem, setor)
+        if ultima_acao != "INICIO":
+            if ultima_acao == "PAUSA":
+                raise ValueError(f"Retome a etapa de {str(setor).lower()} antes de concluir.")
+            raise ValueError(f"Inicie a etapa de {str(setor).lower()} antes de concluir.")
 
-    pendente = float(ordem.get(campo_pendente, 0) or 0)
-    if quantidade > pendente:
-        raise ValueError(f"A quantidade passa do pendente de {str(setor).lower()} ({_formatar_numero(pendente)}).")
+        pendente = float(ordem.get(campo_pendente, 0) or 0)
+        if quantidade > pendente:
+            raise ValueError(f"A quantidade passa do pendente de {str(setor).lower()} ({_formatar_numero(pendente)}).")
 
-    acao = acao_descritiva("Fim" if quantidade >= pendente else "Parcial", setor)
-    registrar_historico(ordem, quantidade, acao, avaliador=usuario, usuario_responsavel=usuario, organizar=organizar)
+        acao = acao_descritiva("Fim" if quantidade >= pendente else "Parcial", setor)
+        registrar_historico(ordem, quantidade, acao, avaliador=usuario, usuario_responsavel=usuario, organizar=organizar)
     carregar_historico.clear()
 
 
@@ -503,21 +534,22 @@ def lancar_pausa_embalagem(ordem, usuario=""):
 
 def lancar_conclusao_embalagem(ordem, quantidade, usuario=""):
     quantidade = float(quantidade)
-    usuario_inicio = ultimo_inicio_ativo_setor_ordem(ordem, "Embalagem")
-    if not usuario_inicio:
-        raise ValueError("Nao foi possivel identificar o usuario que iniciou a embalagem. Inicie a etapa novamente.")
-    pendente = float(ordem.get("QUANTIDADE_PENDENTE", 0) or 0)
-    lancar_movimento_setor(ordem, quantidade, "Embalagem", usuario=usuario_inicio, organizar=False)
-    if quantidade < pendente:
-        registrar_historico(
-            ordem,
-            0,
-            acao_descritiva("Fim", "Embalagem"),
-            avaliador=usuario_inicio,
-            usuario_responsavel=usuario_inicio,
-            organizar=False,
-        )
-    organizar_historico()
+    with _SHEETS_LOCK:
+        usuario_inicio = ultimo_inicio_ativo_setor_ordem(ordem, "Embalagem")
+        if not usuario_inicio:
+            raise ValueError("Nao foi possivel identificar o usuario que iniciou a embalagem. Inicie a etapa novamente.")
+        pendente = float(ordem.get("QUANTIDADE_PENDENTE", 0) or 0)
+        lancar_movimento_setor(ordem, quantidade, "Embalagem", usuario=usuario_inicio, organizar=False)
+        if quantidade < pendente:
+            registrar_historico(
+                ordem,
+                0,
+                acao_descritiva("Fim", "Embalagem"),
+                avaliador=usuario_inicio,
+                usuario_responsavel=usuario_inicio,
+                organizar=False,
+            )
+        organizar_historico()
 
 
 def lancar_aprovacao_qualidade(ordem, quantidade_aprovada, avaliador="", embalagem=False):
@@ -525,44 +557,45 @@ def lancar_aprovacao_qualidade(ordem, quantidade_aprovada, avaliador="", embalag
     if quantidade_aprovada <= 0:
         raise ValueError("Informe uma quantidade maior que zero.")
 
-    ultima_acao = ultima_acao_setor_ordem(ordem, "Qualidade")
-    if ultima_acao != "INICIO":
-        if ultima_acao == "PAUSA":
-            raise ValueError("Retome a etapa de qualidade antes de aprovar.")
-        raise ValueError("Inicie a etapa de qualidade antes de aprovar.")
-    usuario_inicio = ultimo_inicio_ativo_setor_ordem(ordem, "Qualidade")
-    if not usuario_inicio:
-        raise ValueError("Nao foi possivel identificar o usuario que iniciou a qualidade. Inicie a etapa novamente.")
+    with _SHEETS_LOCK:
+        ultima_acao = ultima_acao_setor_ordem(ordem, "Qualidade")
+        if ultima_acao != "INICIO":
+            if ultima_acao == "PAUSA":
+                raise ValueError("Retome a etapa de qualidade antes de aprovar.")
+            raise ValueError("Inicie a etapa de qualidade antes de aprovar.")
+        usuario_inicio = ultimo_inicio_ativo_setor_ordem(ordem, "Qualidade")
+        if not usuario_inicio:
+            raise ValueError("Nao foi possivel identificar o usuario que iniciou a qualidade. Inicie a etapa novamente.")
 
-    pendente = float(ordem.get("QUANTIDADE_PENDENTE", 0) or 0)
-    if quantidade_aprovada > pendente:
-        raise ValueError(f"A quantidade aprovada passa do pendente de qualidade ({_formatar_numero(pendente)}).")
+        pendente = float(ordem.get("QUANTIDADE_PENDENTE", 0) or 0)
+        if quantidade_aprovada > pendente:
+            raise ValueError(f"A quantidade aprovada passa do pendente de qualidade ({_formatar_numero(pendente)}).")
 
-    registros = [
-        {
-            "ordem": ordem,
-            "quantidade": quantidade_aprovada,
-            "acao": acao_descritiva("Aprovado", "Qualidade"),
-            "avaliador": usuario_inicio,
-            "usuario_responsavel": usuario_inicio,
-        },
-        {
-            "ordem": ordem,
-            "quantidade": 0,
-            "acao": acao_descritiva("Fim", "Qualidade"),
-            "avaliador": usuario_inicio,
-            "usuario_responsavel": usuario_inicio,
-        },
-    ]
-    if embalagem:
-        registros.append({
-            "ordem": ordem,
-            "quantidade": quantidade_aprovada,
-            "acao": acao_descritiva("Entrada", "Embalagem"),
-            "avaliador": usuario_inicio,
-            "usuario_responsavel": usuario_inicio,
-        })
-    registrar_historico_lote(registros)
+        registros = [
+            {
+                "ordem": ordem,
+                "quantidade": quantidade_aprovada,
+                "acao": acao_descritiva("Aprovado", "Qualidade"),
+                "avaliador": usuario_inicio,
+                "usuario_responsavel": usuario_inicio,
+            },
+            {
+                "ordem": ordem,
+                "quantidade": 0,
+                "acao": acao_descritiva("Fim", "Qualidade"),
+                "avaliador": usuario_inicio,
+                "usuario_responsavel": usuario_inicio,
+            },
+        ]
+        if embalagem:
+            registros.append({
+                "ordem": ordem,
+                "quantidade": quantidade_aprovada,
+                "acao": acao_descritiva("Entrada", "Embalagem"),
+                "avaliador": usuario_inicio,
+                "usuario_responsavel": usuario_inicio,
+            })
+        registrar_historico_lote(registros)
     carregar_historico.clear()
 
 
@@ -574,56 +607,63 @@ def lancar_reprovacao_qualidade(ordem, quantidade_reprovada, avaliador=""):
     if quantidade_reprovada <= 0:
         raise ValueError("Informe uma quantidade maior que zero.")
 
-    ultima_acao = ultima_acao_setor_ordem(ordem, "Qualidade")
-    if ultima_acao != "INICIO":
-        if ultima_acao == "PAUSA":
-            raise ValueError("Retome a etapa de qualidade antes de reprovar.")
-        raise ValueError("Inicie a etapa de qualidade antes de reprovar.")
-    usuario_inicio = ultimo_inicio_ativo_setor_ordem(ordem, "Qualidade")
-    if not usuario_inicio:
-        raise ValueError("Nao foi possivel identificar o usuario que iniciou a qualidade. Inicie a etapa novamente.")
+    with _SHEETS_LOCK:
+        ultima_acao = ultima_acao_setor_ordem(ordem, "Qualidade")
+        if ultima_acao != "INICIO":
+            if ultima_acao == "PAUSA":
+                raise ValueError("Retome a etapa de qualidade antes de reprovar.")
+            raise ValueError("Inicie a etapa de qualidade antes de reprovar.")
+        usuario_inicio = ultimo_inicio_ativo_setor_ordem(ordem, "Qualidade")
+        if not usuario_inicio:
+            raise ValueError("Nao foi possivel identificar o usuario que iniciou a qualidade. Inicie a etapa novamente.")
 
-    worksheet = abrir_planilha().worksheet(aba_origem)
-    headers = worksheet.row_values(1)
-    coluna_realizado = _indice_coluna(headers, "REALIZADO")
-    realizado_atual = _numero_celula(worksheet.cell(linha_planilha, coluna_realizado).value)
+        worksheet = abrir_planilha().worksheet(aba_origem)
+        headers = worksheet.row_values(1)
+        _confirmar_linha_ordem(worksheet, headers, linha_planilha, ordem)
+        coluna_realizado = _indice_coluna(headers, "REALIZADO")
+        realizado_atual = _numero_celula(worksheet.cell(linha_planilha, coluna_realizado).value)
 
-    if quantidade_reprovada > realizado_atual:
-        raise ValueError(f"A quantidade reprovada passa do realizado atual ({_formatar_numero(realizado_atual)}).")
+        if quantidade_reprovada > realizado_atual:
+            raise ValueError(f"A quantidade reprovada passa do realizado atual ({_formatar_numero(realizado_atual)}).")
 
-    novo_realizado = max(realizado_atual - quantidade_reprovada, 0)
-    worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(novo_realizado))
-    try:
-        ajustar_historico_reprovacao(ordem, quantidade_reprovada)
-        registrar_historico_lote([
-            {
-                "ordem": ordem,
-                "quantidade": quantidade_reprovada,
-                "acao": acao_descritiva("Reprovado", "Qualidade"),
-                "avaliador": usuario_inicio,
-                "usuario_responsavel": usuario_inicio,
-            },
-            {
-                "ordem": ordem,
-                "quantidade": 0,
-                "acao": acao_descritiva("Fim", "Qualidade"),
-                "avaliador": usuario_inicio,
-                "usuario_responsavel": usuario_inicio,
-            },
-        ])
-    except Exception as exc:
+        novo_realizado = max(realizado_atual - quantidade_reprovada, 0)
+        worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(novo_realizado))
         try:
-            worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(realizado_atual))
-            carregar_ordens.clear()
-        except Exception:
-            pass
-        raise RuntimeError("A reprovacao foi desfeita porque nao foi possivel registrar o historico. Tente novamente.") from exc
+            ajustar_historico_reprovacao(ordem, quantidade_reprovada)
+            registrar_historico_lote([
+                {
+                    "ordem": ordem,
+                    "quantidade": quantidade_reprovada,
+                    "acao": acao_descritiva("Reprovado", "Qualidade"),
+                    "avaliador": usuario_inicio,
+                    "usuario_responsavel": usuario_inicio,
+                },
+                {
+                    "ordem": ordem,
+                    "quantidade": 0,
+                    "acao": acao_descritiva("Fim", "Qualidade"),
+                    "avaliador": usuario_inicio,
+                    "usuario_responsavel": usuario_inicio,
+                },
+            ])
+        except Exception as exc:
+            try:
+                worksheet.update_cell(linha_planilha, coluna_realizado, _formatar_numero(realizado_atual))
+                carregar_ordens.clear()
+            except Exception:
+                pass
+            raise RuntimeError("A reprovacao foi desfeita porque nao foi possivel registrar o historico. Tente novamente.") from exc
 
     carregar_ordens.clear()
     carregar_historico.clear()
 
 
 def ajustar_historico_reprovacao(ordem, quantidade_reprovada):
+    with _SHEETS_LOCK:
+        return _ajustar_historico_reprovacao_impl(ordem, quantidade_reprovada)
+
+
+def _ajustar_historico_reprovacao_impl(ordem, quantidade_reprovada):
     worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
     values = worksheet.get_all_values()
     if len(values) < 2:
@@ -875,13 +915,14 @@ def ultima_acao_embalagem_ordem(ordem):
 
 
 def registrar_historico(ordem, quantidade_lancada, acao, avaliador="", usuario_responsavel="", organizar=True):
-    worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
-    headers = worksheet.row_values(1)
-    linha = _montar_linha_historico(headers, ordem, quantidade_lancada, acao, avaliador, usuario_responsavel)
+    with _SHEETS_LOCK:
+        worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
+        headers = worksheet.row_values(1)
+        linha = _montar_linha_historico(headers, ordem, quantidade_lancada, acao, avaliador, usuario_responsavel)
 
-    worksheet.append_row(linha, value_input_option="RAW")
-    if organizar:
-        organizar_historico()
+        worksheet.append_row(linha, value_input_option="RAW")
+        if organizar:
+            organizar_historico()
     carregar_historico.clear()
 
 
@@ -890,23 +931,24 @@ def registrar_historico_lote(registros, organizar=True):
     if not registros:
         return
 
-    worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
-    headers = worksheet.row_values(1)
-    linhas = [
-        _montar_linha_historico(
-            headers,
-            registro.get("ordem", {}),
-            registro.get("quantidade", 0),
-            registro.get("acao", ""),
-            registro.get("avaliador", ""),
-            registro.get("usuario_responsavel", ""),
-        )
-        for registro in registros
-    ]
+    with _SHEETS_LOCK:
+        worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
+        headers = worksheet.row_values(1)
+        linhas = [
+            _montar_linha_historico(
+                headers,
+                registro.get("ordem", {}),
+                registro.get("quantidade", 0),
+                registro.get("acao", ""),
+                registro.get("avaliador", ""),
+                registro.get("usuario_responsavel", ""),
+            )
+            for registro in registros
+        ]
 
-    worksheet.append_rows(linhas, value_input_option="RAW")
-    if organizar:
-        organizar_historico()
+        worksheet.append_rows(linhas, value_input_option="RAW")
+        if organizar:
+            organizar_historico()
     carregar_historico.clear()
 
 
@@ -943,6 +985,11 @@ def _montar_linha_historico(headers, ordem, quantidade_lancada, acao, avaliador=
 
 
 def organizar_historico():
+    with _SHEETS_LOCK:
+        _organizar_historico_impl()
+
+
+def _organizar_historico_impl():
     worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
     values = worksheet.get_all_values()
     if len(values) < 3:
@@ -1413,6 +1460,28 @@ def _indice_coluna_opcional(headers, nomes):
         if indice:
             return indice
     return None
+
+
+def _confirmar_linha_ordem(worksheet, headers, linha_planilha, ordem):
+    col_op = _indice_coluna_opcional(headers, ["N° DA OP", "N DA OP", "OP"])
+    col_codigo = _indice_coluna_opcional(headers, ["COD_PRODUTO", "CODIGO PRODUTO", "CODIGO"])
+    if not col_op or not col_codigo:
+        return
+
+    valores = worksheet.row_values(linha_planilha)
+
+    def valor(coluna):
+        indice = coluna - 1
+        return str(valores[indice]).strip() if indice < len(valores) else ""
+
+    op_confere = _normalizar(valor(col_op)) == _normalizar(ordem.get("OP", ""))
+    codigo_confere = _normalizar(valor(col_codigo)) == _normalizar(ordem.get("COD_PRODUTO", ""))
+    if not op_confere or not codigo_confere:
+        carregar_ordens.clear()
+        raise RuntimeError(
+            "A programacao foi alterada por outra pessoa desde que esta pagina foi carregada. "
+            "Atualize a pagina e tente novamente."
+        )
 
 
 def _encontrar_coluna(df, nomes):
