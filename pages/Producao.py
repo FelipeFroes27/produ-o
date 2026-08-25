@@ -1207,6 +1207,223 @@ def grafico_por_aba(ordens_usuario):
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 
+def aplicar_estilo_hub():
+    st.markdown(
+        """
+        <style>
+        .funcionario-nome {
+            color: #000000;
+            font-size: 19px;
+            font-weight: 850;
+            margin-bottom: 8px;
+            overflow-wrap: anywhere;
+        }
+
+        [class*="st-key-func_card_"] {
+            border: 2px solid #000000 !important;
+            border-radius: 8px !important;
+            background: #ffffff !important;
+            box-shadow: none !important;
+        }
+
+        [class*="st-key-func_card_"] div[data-testid="stButton"] button {
+            min-height: 42px;
+            width: 100%;
+            margin-top: 12px;
+            border: 2px solid #000000 !important;
+            border-radius: 8px !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+            font-weight: 800 !important;
+            box-shadow: none !important;
+        }
+
+        [class*="st-key-func_card_"] div[data-testid="stButton"] button:hover {
+            background: #f2f4f7 !important;
+            border-color: #000000 !important;
+        }
+
+        .hub-secao-title {
+            margin: 18px 0 10px 0;
+            color: #000000;
+            font-size: 16px;
+            font-weight: 850;
+        }
+
+        .st-key-voltar_hub button {
+            border: 2px solid #000000 !important;
+            border-radius: 8px !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+            font-weight: 800 !important;
+            box-shadow: none !important;
+        }
+
+        .st-key-voltar_hub button:hover {
+            background: #f2f4f7 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def filtrar_pendentes_geral(ordens):
+    return ordens[
+        (ordens["STATUS"].astype(str).str.upper() != "OK")
+        & (ordens["SALDO_NUM"] > 0)
+        & (ordens["DATA_PRIORIDADE"].notna())
+        & (ordens["OP"].astype(str).str.strip() != "")
+    ].copy()
+
+
+def filtrar_pendentes_usuario(ordens, usuario):
+    pendentes = filtrar_pendentes_geral(ordens)
+    return pendentes[pendentes["USUARIO_RESPONSAVEL"].astype(str).str.strip() == usuario].copy()
+
+
+def resumo_pendentes(ordens_filtradas):
+    ordens_filtradas = marcar_ordens_duplicadas(ordens_filtradas)
+    exibicao = ocultar_repeticoes_duplicadas(ordens_filtradas)
+    return {
+        "pendentes": len(exibicao),
+        "atrasadas": int(exibicao["ATRASADA"].sum()) if not exibicao.empty else 0,
+        "producao": int((exibicao["ABA_ORIGEM"] == "Produção").sum()) if not exibicao.empty else 0,
+        "manutencao_pecas": int(exibicao["ABA_ORIGEM"].isin(["Manutenção", "Peças"]).sum()) if not exibicao.empty else 0,
+    }
+
+
+def render_card_funcionario(indice, nome, ordens):
+    resumo = resumo_pendentes(filtrar_pendentes_usuario(ordens, nome))
+    with st.container(border=True, key=f"func_card_{indice}"):
+        st.markdown(f'<div class="funcionario-nome">{escape(nome)}</div>', unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="order-badges">
+                <span class="order-badge">{resumo['pendentes']} pendente(s)</span>
+                <span class="order-badge">{resumo['atrasadas']} atrasada(s)</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button("Abrir ordens", key=f"abrir_func_{indice}", use_container_width=True):
+            st.session_state.usuario_idx = indice
+            st.session_state.producao_view = "usuario"
+            st.session_state.pop("ordem_selecionada", None)
+            st.rerun()
+
+
+def render_hub_producao(ordens, nomes_usuarios):
+    aplicar_estilo_hub()
+
+    geral = filtrar_pendentes_geral(ordens)
+    resumo_geral = resumo_pendentes(geral)
+    produtos_programados = (
+        geral["COD_PRODUTO"].astype(str).str.strip().loc[lambda serie: serie != ""].nunique()
+        if not geral.empty
+        else 0
+    )
+    em_andamento = int(ordens["EM_ANDAMENTO"].sum()) if "EM_ANDAMENTO" in ordens.columns else 0
+
+    _, botao_atualizar = st.columns([4, .8])
+    with botao_atualizar:
+        st.markdown('<div class="refresh-button">', unsafe_allow_html=True)
+        if st.button("Atualizar", key="atualizar_hub", use_container_width=True):
+            carregar_usuarios.clear()
+            carregar_ordens.clear()
+            carregar_historico.clear()
+            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        render_kpi("Ordens em aberto", resumo_geral["pendentes"], "Todas as demandas pendentes da produção")
+    with k2:
+        render_kpi("Atrasadas", resumo_geral["atrasadas"], "Status pendente com data vencida")
+    with k3:
+        render_kpi("Produtos programados", produtos_programados, "Produtos distintos com demanda aberta")
+    with k4:
+        render_kpi("Em andamento", em_andamento, "Ordens com apontamento ativo agora")
+
+    st.markdown('<div class="hub-secao-title">Selecione um funcionário</div>', unsafe_allow_html=True)
+    colunas_por_linha = 3
+    for inicio in range(0, len(nomes_usuarios), colunas_por_linha):
+        bloco = nomes_usuarios[inicio:inicio + colunas_por_linha]
+        colunas = st.columns(colunas_por_linha)
+        for posicao, nome in enumerate(bloco):
+            with colunas[posicao]:
+                render_card_funcionario(inicio + posicao, nome, ordens)
+
+
+def render_ordens_do_usuario(ordens, nomes_usuarios):
+    if "usuario_idx" not in st.session_state:
+        st.session_state.usuario_idx = 0
+    st.session_state.usuario_idx = min(st.session_state.usuario_idx, len(nomes_usuarios) - 1)
+
+    nav_0, nav_1, nav_2, nav_3, nav_4 = st.columns([1.05, .55, 2.5, .55, .8])
+    with nav_0:
+        st.markdown('<div class="nav-button">', unsafe_allow_html=True)
+        if st.button("← Voltar", key="voltar_hub", use_container_width=True):
+            st.session_state.producao_view = "hub"
+            st.session_state.pop("ordem_selecionada", None)
+            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with nav_1:
+        st.markdown('<div class="nav-button">', unsafe_allow_html=True)
+        if st.button("<", key="usuario_anterior", use_container_width=True, disabled=st.session_state.usuario_idx <= 0):
+            st.session_state.usuario_idx -= 1
+            st.session_state.pop("ordem_selecionada", None)
+            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    usuario_atual = nomes_usuarios[st.session_state.usuario_idx]
+    with nav_2:
+        st.markdown(f'<div class="user-title">{escape(usuario_atual)}</div>', unsafe_allow_html=True)
+
+    with nav_3:
+        st.markdown('<div class="nav-button">', unsafe_allow_html=True)
+        if st.button(">", key="usuario_proximo", use_container_width=True, disabled=st.session_state.usuario_idx >= len(nomes_usuarios) - 1):
+            st.session_state.usuario_idx += 1
+            st.session_state.pop("ordem_selecionada", None)
+            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with nav_4:
+        st.markdown('<div class="refresh-button">', unsafe_allow_html=True)
+        if st.button("Atualizar", key="atualizar_ordens", use_container_width=True):
+            carregar_usuarios.clear()
+            carregar_ordens.clear()
+            carregar_historico.clear()
+            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    ordens_pendentes = filtrar_pendentes_usuario(ordens, usuario_atual)
+    ordens_pendentes = marcar_ordens_duplicadas(ordens_pendentes)
+    ordens_pendentes = ordenar_demanda(ordens_pendentes)
+    ordens_exibicao = ordenar_demanda(ocultar_repeticoes_duplicadas(ordens_pendentes))
+
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        render_kpi("Ordens pendentes", len(ordens_exibicao), "Demandas abertas para este usuário")
+    with k2:
+        render_kpi("Atrasadas", int(ordens_exibicao["ATRASADA"].sum()) if not ordens_exibicao.empty else 0, "Status pendente com data vencida")
+    with k3:
+        producao = int((ordens_exibicao["ABA_ORIGEM"] == "Produção").sum()) if not ordens_exibicao.empty else 0
+        render_kpi("Produção", producao, "Produtos novos para montar")
+    with k4:
+        manutencao_pecas = int(ordens_exibicao["ABA_ORIGEM"].isin(["Manutenção", "Peças"]).sum()) if not ordens_exibicao.empty else 0
+        render_kpi("Manutenção e peças", manutencao_pecas, "Demandas de reparo ou falta de peças")
+
+    st.markdown('<div class="panel-title">Demandas do usuário</div>', unsafe_allow_html=True)
+    if ordens_exibicao.empty:
+        st.markdown('<div class="empty">Nada pendente para este usuário.</div>', unsafe_allow_html=True)
+    else:
+        with st.container(key="cards_lista"):
+            for _, linha in ordens_exibicao.iterrows():
+                render_ordem_card(linha, ordens_pendentes)
+
+
 aplicar_estilo()
 render_sidebar()
 
@@ -1248,67 +1465,10 @@ if not nomes_usuarios:
     st.warning("Nenhum usuário com nome preenchido.")
     st.stop()
 
-if "usuario_idx" not in st.session_state:
-    st.session_state.usuario_idx = 0
-st.session_state.usuario_idx = min(st.session_state.usuario_idx, len(nomes_usuarios) - 1)
+if "producao_view" not in st.session_state:
+    st.session_state.producao_view = "hub"
 
-nav_1, nav_2, nav_3, nav_4 = st.columns([.55, 3.1, .55, .8])
-with nav_1:
-    st.markdown('<div class="nav-button">', unsafe_allow_html=True)
-    if st.button("<", key="usuario_anterior", use_container_width=True, disabled=st.session_state.usuario_idx <= 0):
-        st.session_state.usuario_idx -= 1
-        st.session_state.pop("ordem_selecionada", None)
-        st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
-
-usuario_atual = nomes_usuarios[st.session_state.usuario_idx]
-with nav_2:
-    st.markdown(f'<div class="user-title">{escape(usuario_atual)}</div>', unsafe_allow_html=True)
-
-with nav_3:
-    st.markdown('<div class="nav-button">', unsafe_allow_html=True)
-    if st.button(">", key="usuario_proximo", use_container_width=True, disabled=st.session_state.usuario_idx >= len(nomes_usuarios) - 1):
-        st.session_state.usuario_idx += 1
-        st.session_state.pop("ordem_selecionada", None)
-        st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
-
-with nav_4:
-    st.markdown('<div class="refresh-button">', unsafe_allow_html=True)
-    if st.button("Atualizar", key="atualizar_ordens", use_container_width=True):
-        carregar_usuarios.clear()
-        carregar_ordens.clear()
-        carregar_historico.clear()
-        st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
-
-ordens_pendentes = ordens[
-    (ordens["USUARIO_RESPONSAVEL"].astype(str).str.strip() == usuario_atual)
-    & (ordens["STATUS"].astype(str).str.upper() != "OK")
-    & (ordens["SALDO_NUM"] > 0)
-    & (ordens["DATA_PRIORIDADE"].notna())
-    & (ordens["OP"].astype(str).str.strip() != "")
-].copy()
-ordens_pendentes = marcar_ordens_duplicadas(ordens_pendentes)
-ordens_pendentes = ordenar_demanda(ordens_pendentes)
-ordens_exibicao = ordenar_demanda(ocultar_repeticoes_duplicadas(ordens_pendentes))
-
-k1, k2, k3, k4 = st.columns(4)
-with k1:
-    render_kpi("Ordens pendentes", len(ordens_exibicao), "Demandas abertas para este usuário")
-with k2:
-    render_kpi("Atrasadas", int(ordens_exibicao["ATRASADA"].sum()) if not ordens_exibicao.empty else 0, "Status pendente com data vencida")
-with k3:
-    producao = int((ordens_exibicao["ABA_ORIGEM"] == "Produ\u00e7\u00e3o").sum()) if not ordens_exibicao.empty else 0
-    render_kpi("Produção", producao, "Produtos novos para montar")
-with k4:
-    manutencao_pecas = int(ordens_exibicao["ABA_ORIGEM"].isin(["Manuten\u00e7\u00e3o", "Pe\u00e7as"]).sum()) if not ordens_exibicao.empty else 0
-    render_kpi("Manutenção e peças", manutencao_pecas, "Demandas de reparo ou falta de peças")
-
-st.markdown('<div class="panel-title">Demandas do usuário</div>', unsafe_allow_html=True)
-if ordens_exibicao.empty:
-    st.markdown('<div class="empty">Nada pendente para este usuário.</div>', unsafe_allow_html=True)
+if st.session_state.producao_view == "usuario":
+    render_ordens_do_usuario(ordens, nomes_usuarios)
 else:
-    with st.container(key="cards_lista"):
-        for _, linha in ordens_exibicao.iterrows():
-            render_ordem_card(linha, ordens_pendentes)
+    render_hub_producao(ordens, nomes_usuarios)
