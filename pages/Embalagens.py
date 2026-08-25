@@ -519,19 +519,21 @@ def montar_fila_embalagem(historico):
         )
         .reset_index()
     )
-    origens = (
-        fontes.sort_values(["DATA_HORA_DT", "ABA_ORIGEM", "OP"], kind="mergesort")
-        .groupby(chaves_produto, dropna=False)
-        .apply(lambda grupo: grupo[chaves_origem + [
-            "QUANTIDADE_PENDENTE",
-            "QUANTIDADE_SOLICITADA",
-            "QUANTIDADE_EMBALADA",
-            "DATA_HORA_DT",
-            "ULTIMA_ACAO_EMBALAGEM",
-        ]].to_dict("records"))
-        .rename("ORIGENS_EMBALAGEM")
-        .reset_index()
-    )
+    colunas_origem_registro = chaves_origem + [
+        "QUANTIDADE_PENDENTE",
+        "QUANTIDADE_SOLICITADA",
+        "QUANTIDADE_EMBALADA",
+        "DATA_HORA_DT",
+        "ULTIMA_ACAO_EMBALAGEM",
+    ]
+    linhas_origens = []
+    for chave, grupo in fontes.sort_values(["DATA_HORA_DT", "ABA_ORIGEM", "OP"], kind="mergesort").groupby(chaves_produto, dropna=False):
+        chave = chave if isinstance(chave, tuple) else (chave,)
+        linhas_origens.append({
+            **dict(zip(chaves_produto, chave)),
+            "ORIGENS_EMBALAGEM": grupo[colunas_origem_registro].to_dict("records"),
+        })
+    origens = pd.DataFrame(linhas_origens, columns=chaves_produto + ["ORIGENS_EMBALAGEM"])
     status = (
         fontes.assign(
             EM_ANDAMENTO_FONTE=fontes["ULTIMA_ACAO_EMBALAGEM"] == "INICIO",
