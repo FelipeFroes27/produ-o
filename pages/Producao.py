@@ -1067,11 +1067,11 @@ def render_anexo_imagem(ordem, chave):
         indice = 0
         for codificado in imagens_base64:
             with colunas[indice % len(colunas)]:
-                st.image(base64.b64decode(codificado), use_container_width=True)
+                st.image(base64.b64decode(codificado), width=200)
             indice += 1
         for id_imagem in ids_drive:
             with colunas[indice % len(colunas)]:
-                st.image(f"https://drive.google.com/thumbnail?id={id_imagem}&sz=w1000", use_container_width=True)
+                st.image(f"https://drive.google.com/thumbnail?id={id_imagem}&sz=w1000", width=200)
             indice += 1
 
     with st.expander("Anexar imagem"):
