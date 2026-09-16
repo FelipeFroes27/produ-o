@@ -1,13 +1,14 @@
 from html import escape
 from pathlib import Path
 import base64
+import re
 
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
 from utils.display_mode import ativar_modo_exibicao, page_link_icon, render_menu_lateral, render_sidebar_brand
-from utils.sheets import _normalizar, acao_base_historico, acao_etapa_historico, carregar_historico, carregar_ordens, carregar_resumo, carregar_usuarios, lancar_inicio_ordem, lancar_pausa_ordem, lancar_realizacao
+from utils.sheets import _normalizar, acao_base_historico, acao_etapa_historico, anexar_imagem_observacao, carregar_historico, carregar_ordens, carregar_resumo, carregar_usuarios, lancar_inicio_ordem, lancar_pausa_ordem, lancar_realizacao
 
 
 st.set_page_config(
@@ -1042,6 +1043,48 @@ def localizar_ordem(df):
     return encontrados.iloc[0]
 
 
+def extrair_links_drive(texto):
+    return re.findall(r"drive\.google\.com/file/d/([a-zA-Z0-9_-]+)", str(texto or ""))
+
+
+def render_anexo_imagem(ordem, chave):
+    ids_imagens = extrair_links_drive(ordem.get("OBS", ""))
+    if ids_imagens:
+        st.markdown('<div class="obs-label" style="margin-top:10px;">Imagens anexadas</div>', unsafe_allow_html=True)
+        colunas = st.columns(min(len(ids_imagens), 4))
+        for indice, id_imagem in enumerate(ids_imagens):
+            with colunas[indice % len(colunas)]:
+                st.image(f"https://drive.google.com/uc?export=view&id={id_imagem}", use_container_width=True)
+
+    with st.expander("Anexar imagem (link do Drive)"):
+        st.caption(
+            "Suba a foto no seu Google Drive, clique com o botão direito nela > "
+            "Compartilhar > Copiar link (deixe como \"Qualquer pessoa com o link\") "
+            "e cole o link abaixo."
+        )
+        link = st.text_input(
+            "Link da imagem no Drive",
+            key=f"link_img_{chave}",
+            placeholder="https://drive.google.com/file/d/.../view",
+        )
+        if st.button("Salvar link", key=f"salvar_link_img_{chave}"):
+            ids_encontrados = extrair_links_drive(link)
+            if not ids_encontrados:
+                st.error(
+                    "Não reconheci um link de arquivo do Google Drive nesse texto. "
+                    "Copie o link usando o botão \"Copiar link\" do Drive."
+                )
+            else:
+                try:
+                    url_padrao = f"https://drive.google.com/file/d/{ids_encontrados[0]}/view"
+                    anexar_imagem_observacao(ordem, url_padrao, usuario=str(ordem.get("USUARIO_RESPONSAVEL", "")))
+                except Exception as exc:
+                    st.error(f"Não foi possível salvar o link: {exc}")
+                else:
+                    st.success("Link da imagem salvo nas observações.")
+                    st.rerun()
+
+
 def render_detalhe(ordem, ordens_usuario, modo="consulta"):
     if ordem is None:
         st.markdown('<div class="empty">Selecione uma ordem na lista para ver os detalhes e lançar a realização.</div>', unsafe_allow_html=True)
@@ -1099,6 +1142,7 @@ def render_detalhe(ordem, ordens_usuario, modo="consulta"):
         """,
         unsafe_allow_html=True,
     )
+    render_anexo_imagem(ordem, f"{origem_chave(ordem['ABA_ORIGEM'])}_{ordem['LINHA_PLANILHA']}")
 
     if ordem["ABA_ORIGEM"] == "Pe\u00e7as":
         render_pecas_faltantes(ordem, ordens_usuario)

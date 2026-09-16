@@ -1,3 +1,4 @@
+import io
 import threading
 import unicodedata
 from datetime import datetime, timedelta, timezone
@@ -7,6 +8,8 @@ import pandas as pd
 import streamlit as st
 from gspread.utils import rowcol_to_a1
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 
 
 _SHEETS_LOCK = threading.RLock()
@@ -85,6 +88,15 @@ def conectar():
         scopes=SCOPES,
     )
     return gspread.authorize(creds)
+
+
+@st.cache_resource
+def conectar_drive():
+    creds = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=SCOPES,
+    )
+    return build("drive", "v3", credentials=creds)
 
 
 @st.cache_resource
@@ -386,6 +398,54 @@ def lancar_encaminhamento_embalagem(ordem, quantidade):
         raise ValueError("Informe uma quantidade maior que zero.")
     registrar_historico(ordem, quantidade, acao_descritiva("Entrada", "Embalagem"))
     carregar_historico.clear()
+
+
+def enviar_imagem_anexo(dados_bytes, nome_arquivo, mime_type="image/jpeg"):
+    pasta_id = st.secrets.get("drive", {}).get("pasta_anexos_id")
+    if not pasta_id:
+        raise ValueError(
+            "Pasta do Drive para anexos nao configurada. "
+            "Adicione pasta_anexos_id em [drive] no secrets.toml."
+        )
+
+    servico = conectar_drive()
+    metadados = {"name": nome_arquivo, "parents": [pasta_id]}
+    midia = MediaIoBaseUpload(io.BytesIO(dados_bytes), mimetype=mime_type, resumable=False)
+    arquivo = servico.files().create(
+        body=metadados,
+        media_body=midia,
+        fields="id",
+        supportsAllDrives=True,
+    ).execute()
+    arquivo_id = arquivo["id"]
+    servico.permissions().create(
+        fileId=arquivo_id,
+        body={"type": "anyone", "role": "reader"},
+        supportsAllDrives=True,
+    ).execute()
+    return f"https://drive.google.com/file/d/{arquivo_id}/view"
+
+
+def anexar_imagem_observacao(ordem, url_imagem, usuario=""):
+    aba_origem = str(ordem["ABA_ORIGEM"])
+    linha_planilha = int(ordem["LINHA_PLANILHA"])
+
+    with _SHEETS_LOCK:
+        worksheet = abrir_planilha().worksheet(aba_origem)
+        headers = worksheet.row_values(1)
+        _confirmar_linha_ordem(worksheet, headers, linha_planilha, ordem)
+        coluna_obs = _indice_coluna_opcional(headers, ["OBS", "OBSERVACAO", "OBSERVACOES"])
+        if not coluna_obs:
+            raise ValueError("A aba nao possui coluna de observacoes.")
+
+        obs_atual = str(worksheet.cell(linha_planilha, coluna_obs).value or "").strip()
+        data_hora = datetime.now(FUSO_BRASILIA).strftime("%d/%m/%Y %H:%M")
+        quem = f" por {usuario}" if usuario else ""
+        linha_nova = f"[Imagem anexada{quem} em {data_hora}: {url_imagem}]"
+        obs_final = f"{obs_atual}\n{linha_nova}" if obs_atual else linha_nova
+
+        worksheet.update_cell(linha_planilha, coluna_obs, obs_final)
+    carregar_ordens.clear()
 
 
 def _confirmar_op_disponivel(values, headers, op_nova):
