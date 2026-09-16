@@ -1059,20 +1059,36 @@ def render_anexo_imagem(ordem, chave):
     obs_bruta = ordem.get("OBS", "")
     imagens_base64 = extrair_imagens_base64(obs_bruta)
     ids_drive = extrair_links_drive(obs_bruta)
-    total_imagens = len(imagens_base64) + len(ids_drive)
+    fontes = [("base64", codificado) for codificado in imagens_base64] + [
+        ("drive", id_imagem) for id_imagem in ids_drive
+    ]
 
-    if total_imagens:
+    if fontes:
         st.markdown('<div class="obs-label" style="margin-top:10px;">Imagens anexadas</div>', unsafe_allow_html=True)
-        colunas = st.columns(min(total_imagens, 4))
-        indice = 0
-        for codificado in imagens_base64:
-            with colunas[indice % len(colunas)]:
-                st.image(base64.b64decode(codificado), width=200)
-            indice += 1
-        for id_imagem in ids_drive:
-            with colunas[indice % len(colunas)]:
-                st.image(f"https://drive.google.com/thumbnail?id={id_imagem}&sz=w1000", width=200)
-            indice += 1
+        colunas = st.columns(min(len(fontes), 4))
+        for posicao, (tipo, valor) in enumerate(fontes):
+            origem_imagem = (
+                base64.b64decode(valor)
+                if tipo == "base64"
+                else f"https://drive.google.com/thumbnail?id={valor}&sz=w1000"
+            )
+            chave_estado = f"ver_grande_{chave}_{posicao}"
+            with colunas[posicao % len(colunas)]:
+                st.image(origem_imagem, width=200)
+                if st.button("Ver em tamanho grande", key=f"botao_{chave_estado}"):
+                    st.session_state[chave_estado] = True
+
+        for posicao, (tipo, valor) in enumerate(fontes):
+            chave_estado = f"ver_grande_{chave}_{posicao}"
+            if st.session_state.get(chave_estado):
+                origem_imagem = (
+                    base64.b64decode(valor)
+                    if tipo == "base64"
+                    else f"https://drive.google.com/thumbnail?id={valor}&sz=w1000"
+                )
+                st.image(origem_imagem, use_container_width=True)
+                if st.button("Fechar imagem ampliada", key=f"fechar_{chave_estado}"):
+                    st.session_state[chave_estado] = False
 
     with st.expander("Anexar imagem"):
         arquivo = st.file_uploader(
