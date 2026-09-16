@@ -8,7 +8,7 @@ import plotly.express as px
 import streamlit as st
 
 from utils.display_mode import ativar_modo_exibicao, page_link_icon, render_menu_lateral, render_sidebar_brand
-from utils.sheets import _normalizar, acao_base_historico, acao_etapa_historico, anexar_imagem_observacao, carregar_historico, carregar_ordens, carregar_resumo, carregar_usuarios, lancar_inicio_ordem, lancar_pausa_ordem, lancar_realizacao
+from utils.sheets import _normalizar, acao_base_historico, acao_etapa_historico, anexar_imagem_base64_observacao, carregar_historico, carregar_ordens, carregar_resumo, carregar_usuarios, lancar_inicio_ordem, lancar_pausa_ordem, lancar_realizacao
 
 
 st.set_page_config(
@@ -1047,42 +1047,56 @@ def extrair_links_drive(texto):
     return re.findall(r"drive\.google\.com/file/d/([a-zA-Z0-9_-]+)", str(texto or ""))
 
 
-def render_anexo_imagem(ordem, chave):
-    ids_imagens = extrair_links_drive(ordem.get("OBS", ""))
-    if ids_imagens:
-        st.markdown('<div class="obs-label" style="margin-top:10px;">Imagens anexadas</div>', unsafe_allow_html=True)
-        colunas = st.columns(min(len(ids_imagens), 4))
-        for indice, id_imagem in enumerate(ids_imagens):
-            with colunas[indice % len(colunas)]:
-                st.image(f"https://drive.google.com/uc?export=view&id={id_imagem}", use_container_width=True)
+def extrair_imagens_base64(texto):
+    return re.findall(r"\[IMG_DATA:([A-Za-z0-9+/=]+)\]", str(texto or ""))
 
-    with st.expander("Anexar imagem (link do Drive)"):
-        st.caption(
-            "Suba a foto no seu Google Drive, clique com o botão direito nela > "
-            "Compartilhar > Copiar link (deixe como \"Qualquer pessoa com o link\") "
-            "e cole o link abaixo."
+
+def limpar_texto_observacao(texto):
+    return re.sub(r"\[IMG_DATA:[A-Za-z0-9+/=]+\]", "[imagem]", str(texto or ""))
+
+
+def render_anexo_imagem(ordem, chave):
+    obs_bruta = ordem.get("OBS", "")
+    imagens_base64 = extrair_imagens_base64(obs_bruta)
+    ids_drive = extrair_links_drive(obs_bruta)
+    total_imagens = len(imagens_base64) + len(ids_drive)
+
+    if total_imagens:
+        st.markdown('<div class="obs-label" style="margin-top:10px;">Imagens anexadas</div>', unsafe_allow_html=True)
+        colunas = st.columns(min(total_imagens, 4))
+        indice = 0
+        for codificado in imagens_base64:
+            with colunas[indice % len(colunas)]:
+                st.image(base64.b64decode(codificado), use_container_width=True)
+            indice += 1
+        for id_imagem in ids_drive:
+            with colunas[indice % len(colunas)]:
+                st.image(f"https://drive.google.com/thumbnail?id={id_imagem}&sz=w1000", use_container_width=True)
+            indice += 1
+
+    with st.expander("Anexar imagem"):
+        arquivo = st.file_uploader(
+            "Escolha uma imagem",
+            type=["png", "jpg", "jpeg"],
+            key=f"upload_img_{chave}",
         )
-        link = st.text_input(
-            "Link da imagem no Drive",
-            key=f"link_img_{chave}",
-            placeholder="https://drive.google.com/file/d/.../view",
-        )
-        if st.button("Salvar link", key=f"salvar_link_img_{chave}"):
-            ids_encontrados = extrair_links_drive(link)
-            if not ids_encontrados:
-                st.error(
-                    "Não reconheci um link de arquivo do Google Drive nesse texto. "
-                    "Copie o link usando o botão \"Copiar link\" do Drive."
+        trava = f"trava_upload_img_{chave}"
+        enviando = bool(st.session_state.get(trava, False))
+        if st.button("Enviar imagem", key=f"enviar_img_{chave}", disabled=arquivo is None or enviando):
+            st.session_state[trava] = True
+            try:
+                anexar_imagem_base64_observacao(
+                    ordem,
+                    arquivo.getvalue(),
+                    usuario=str(ordem.get("USUARIO_RESPONSAVEL", "")),
                 )
+            except Exception as exc:
+                st.session_state.pop(trava, None)
+                st.error(f"Não foi possível anexar a imagem: {exc}")
             else:
-                try:
-                    url_padrao = f"https://drive.google.com/file/d/{ids_encontrados[0]}/view"
-                    anexar_imagem_observacao(ordem, url_padrao, usuario=str(ordem.get("USUARIO_RESPONSAVEL", "")))
-                except Exception as exc:
-                    st.error(f"Não foi possível salvar o link: {exc}")
-                else:
-                    st.success("Link da imagem salvo nas observações.")
-                    st.rerun()
+                st.session_state.pop(trava, None)
+                st.success("Imagem anexada às observações.")
+                st.rerun()
 
 
 def render_detalhe(ordem, ordens_usuario, modo="consulta"):
@@ -1132,7 +1146,7 @@ def render_detalhe(ordem, ordens_usuario, modo="consulta"):
         unsafe_allow_html=True,
     )
 
-    observacao = str(ordem["OBS"]).strip() or "-"
+    observacao = limpar_texto_observacao(str(ordem["OBS"]).strip()) or "-"
     st.markdown(
         f"""
         <div class="obs-box">

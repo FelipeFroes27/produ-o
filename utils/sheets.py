@@ -1,3 +1,4 @@
+import base64
 import io
 import threading
 import unicodedata
@@ -8,8 +9,7 @@ import pandas as pd
 import streamlit as st
 from gspread.utils import rowcol_to_a1
 from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
+from PIL import Image
 
 
 _SHEETS_LOCK = threading.RLock()
@@ -90,13 +90,6 @@ def conectar():
     return gspread.authorize(creds)
 
 
-@st.cache_resource
-def conectar_drive():
-    creds = Credentials.from_service_account_info(
-        st.secrets["gcp_service_account"],
-        scopes=SCOPES,
-    )
-    return build("drive", "v3", credentials=creds)
 
 
 @st.cache_resource
@@ -400,33 +393,32 @@ def lancar_encaminhamento_embalagem(ordem, quantidade):
     carregar_historico.clear()
 
 
-def enviar_imagem_anexo(dados_bytes, nome_arquivo, mime_type="image/jpeg"):
-    pasta_id = st.secrets.get("drive", {}).get("pasta_anexos_id")
-    if not pasta_id:
-        raise ValueError(
-            "Pasta do Drive para anexos nao configurada. "
-            "Adicione pasta_anexos_id em [drive] no secrets.toml."
-        )
-
-    servico = conectar_drive()
-    metadados = {"name": nome_arquivo, "parents": [pasta_id]}
-    midia = MediaIoBaseUpload(io.BytesIO(dados_bytes), mimetype=mime_type, resumable=False)
-    arquivo = servico.files().create(
-        body=metadados,
-        media_body=midia,
-        fields="id",
-        supportsAllDrives=True,
-    ).execute()
-    arquivo_id = arquivo["id"]
-    servico.permissions().create(
-        fileId=arquivo_id,
-        body={"type": "anyone", "role": "reader"},
-        supportsAllDrives=True,
-    ).execute()
-    return f"https://drive.google.com/file/d/{arquivo_id}/view"
+LIMITE_BASE64_IMAGEM = 35000
+LIMITE_CARACTERES_OBS = 49000
 
 
-def anexar_imagem_observacao(ordem, url_imagem, usuario=""):
+def _comprimir_imagem_para_base64(dados_bytes):
+    imagem = Image.open(io.BytesIO(dados_bytes))
+    imagem = imagem.convert("RGB")
+
+    largura_max = 900
+    qualidade = 70
+    for _tentativa in range(6):
+        copia = imagem.copy()
+        copia.thumbnail((largura_max, largura_max))
+        buffer = io.BytesIO()
+        copia.save(buffer, format="JPEG", quality=qualidade, optimize=True)
+        codificado = base64.b64encode(buffer.getvalue()).decode("ascii")
+        if len(codificado) <= LIMITE_BASE64_IMAGEM:
+            return codificado
+        qualidade = max(20, qualidade - 15)
+        largura_max = max(300, int(largura_max * 0.8))
+
+    raise ValueError("Nao foi possivel comprimir a imagem o suficiente para salvar na planilha.")
+
+
+def anexar_imagem_base64_observacao(ordem, dados_bytes, usuario=""):
+    codificado = _comprimir_imagem_para_base64(dados_bytes)
     aba_origem = str(ordem["ABA_ORIGEM"])
     linha_planilha = int(ordem["LINHA_PLANILHA"])
 
@@ -441,8 +433,14 @@ def anexar_imagem_observacao(ordem, url_imagem, usuario=""):
         obs_atual = str(worksheet.cell(linha_planilha, coluna_obs).value or "").strip()
         data_hora = datetime.now(FUSO_BRASILIA).strftime("%d/%m/%Y %H:%M")
         quem = f" por {usuario}" if usuario else ""
-        linha_nova = f"[Imagem anexada{quem} em {data_hora}: {url_imagem}]"
-        obs_final = f"{obs_atual}\n{linha_nova}" if obs_atual else linha_nova
+        marcador = f"[Imagem anexada{quem} em {data_hora}][IMG_DATA:{codificado}]"
+        obs_final = f"{obs_atual}\n{marcador}" if obs_atual else marcador
+
+        if len(obs_final) > LIMITE_CARACTERES_OBS:
+            raise ValueError(
+                "As observacoes desta ordem ja estao proximas do limite de tamanho. "
+                "Remova algo antes de anexar outra imagem."
+            )
 
         worksheet.update_cell(linha_planilha, coluna_obs, obs_final)
     carregar_ordens.clear()
