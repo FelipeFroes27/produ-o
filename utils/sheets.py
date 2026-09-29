@@ -71,7 +71,7 @@ COLUNAS_FERIADOS = ["DATA"]
 ETAPAS_PLANEJAMENTO = ["PRODUCAO", "MANUTENCAO", "PECAS"]
 CABECALHOS_PLANEJAMENTO = {
     "Produção": ["DATA_ABERTURA", "N° DA OP", "COD_PRODUTO", "DESCRIÇÃO", "QUANTIDADE", "OBS", "DATA_PREVISTA", "REALIZADO", "STATUS", "USUÁRIO RESPONSAVEL"],
-    "Manutenção": ["DATA", "N° DA OP", "COD_PRODUTO", "DESCRIÇÃO", "OBS", "QUANTIDADE", "REALIZADO", "STATUS", "USUÁRIO RESPONSAVEL"],
+    "Manutenção": ["DATA_ABERTURA", "N° DA OP", "COD_PRODUTO", "DESCRIÇÃO", "OBS", "QUANTIDADE", "REALIZADO", "STATUS", "USUÁRIO RESPONSAVEL"],
     "Peças": ["DATA", "N° DA OP", "COD_PRODUTO", "DESCRIÇÃO", "COD_PEÇA", "DESCRIÇÃO PEÇA", "QTD_PEÇAS", "QUANTIDADE", "REALIZADO", "STATUS", "USUÁRIO RESPONSAVEL"],
 }
 
@@ -1218,7 +1218,16 @@ def _remover_linhas_de_cabecalho_repetido(df):
         (coluna for coluna in df.columns if coluna not in ["ABA_ORIGEM", "LINHA_PLANILHA"]),
         df.columns[0],
     )
-    return df[df[primeira_coluna].astype(str).str.strip() != primeira_coluna].copy()
+    filtro = df[primeira_coluna].astype(str).str.strip() != primeira_coluna
+
+    # blocos semanais antigos podem ter ficado com o texto de um cabecalho que
+    # ja foi renomeado (ex: coluna DATA virou DATA_ABERTURA); a coluna de OP
+    # raramente muda de nome, entao serve de checagem extra mais estavel
+    coluna_op = next((c for c in df.columns if _normalizar(c) == _normalizar("N° DA OP")), None)
+    if coluna_op is not None:
+        filtro &= df[coluna_op].astype(str).str.strip() != "N° DA OP"
+
+    return df[filtro].copy()
 
 
 def _montar_linha_planejamento(aba, headers, dados):
@@ -1482,8 +1491,11 @@ def _vincular_pecas_a_ordem(df):
 
 
 def _data_prioridade(linha):
-    if linha["ABA_ORIGEM"] == "Produ\u00e7\u00e3o":
+    aba = linha["ABA_ORIGEM"]
+    if aba == "Produ\u00e7\u00e3o":
         texto_data = linha.get("DATA_PREVISTA", "")
+    elif aba == "Manuten\u00e7\u00e3o":
+        texto_data = linha.get("DATA_ABERTURA", "")
     else:
         texto_data = linha.get("DATA", "")
 
