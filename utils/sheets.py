@@ -972,13 +972,25 @@ def ultima_acao_embalagem_ordem(ordem):
     return f"{ultima_acao} EMBALAGEM" if ultima_acao else ""
 
 
+def _anexar_linhas_historico(worksheet, linhas):
+    # append_row/append_rows decidem o fim da tabela olhando so as linhas VISIVEIS:
+    # com filtro escondendo o fim da aba, eles sobrescrevem linhas antigas e um
+    # lancamento pode apagar o anterior. Aqui a linha de destino e calculada pelo
+    # total real de linhas (get_all_values inclui as escondidas por filtro).
+    ultima = len(worksheet.get_all_values())
+    fim = ultima + len(linhas)
+    if fim > worksheet.row_count:
+        worksheet.add_rows(fim - worksheet.row_count)
+    worksheet.update(range_name=f"A{ultima + 1}", values=linhas, value_input_option="RAW")
+
+
 def registrar_historico(ordem, quantidade_lancada, acao, avaliador="", usuario_responsavel="", organizar=True):
     with _SHEETS_LOCK:
         worksheet = abrir_planilha().worksheet(ABA_HISTORICO)
         headers = worksheet.row_values(1)
         linha = _montar_linha_historico(headers, ordem, quantidade_lancada, acao, avaliador, usuario_responsavel)
 
-        worksheet.append_row(linha, value_input_option="RAW")
+        _anexar_linhas_historico(worksheet, [linha])
         if organizar:
             organizar_historico()
     carregar_historico.clear()
@@ -1004,7 +1016,7 @@ def registrar_historico_lote(registros, organizar=True):
             for registro in registros
         ]
 
-        worksheet.append_rows(linhas, value_input_option="RAW")
+        _anexar_linhas_historico(worksheet, linhas)
         if organizar:
             organizar_historico()
     carregar_historico.clear()
