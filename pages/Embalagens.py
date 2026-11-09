@@ -7,6 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from utils.display_mode import ativar_modo_exibicao, page_link_icon, render_menu_lateral, render_sidebar_brand
+from utils.etiqueta_ui import mostrar_etiquetas_pendentes, solicitar_etiquetas
 from utils.sheets import (
     acao_base_historico,
     acao_etapa_historico,
@@ -696,6 +697,13 @@ def modal_conclusao(item, usuarios):
             value=maximo_ativo,
             step=1,
         )
+        # a chave muda a cada lançamento, então a caixinha sempre volta desmarcada
+        gerar_etiqueta = st.checkbox(
+            "Etiqueta",
+            value=False,
+            key=f"etiqueta_{chave}_{st.session_state.get('etiqueta_contador', 0)}",
+            help="Gerar uma etiqueta por unidade embalada, com a OP de origem de cada uma.",
+        )
         confirmar = st.form_submit_button(
             "Lançamento em andamento..." if st.session_state.get(trava) else "Confirmar embalagem",
             use_container_width=True,
@@ -703,6 +711,7 @@ def modal_conclusao(item, usuarios):
         )
     if confirmar:
         st.session_state[trava] = True
+        itens_etiqueta = []
         try:
             restante = float(quantidade)
             for origem in origens_ativas:
@@ -711,15 +720,38 @@ def modal_conclusao(item, usuarios):
                 quantidade_origem = min(float(origem.get("QUANTIDADE_PENDENTE", 0) or 0), restante)
                 if quantidade_origem <= 0:
                     continue
-                lancar_conclusao_embalagem(montar_ordem_origem_embalagem(origem), quantidade_origem)
+                responsavel = lancar_conclusao_embalagem(montar_ordem_origem_embalagem(origem), quantidade_origem)
                 restante -= quantidade_origem
+                # só anota para a etiqueta depois do lançamento gravado; nada aqui pode interromper o laço
+                try:
+                    itens_etiqueta.append({"ordem": origem.get("OP", ""), "responsavel": responsavel, "unidades": int(round(quantidade_origem))})
+                except Exception:
+                    pass
             if restante > 0:
                 raise ValueError("A quantidade passa do total iniciado para embalagem.")
         except Exception as exc:
             st.session_state.pop(trava, None)
             st.error(str(exc))
+            if itens_etiqueta:
+                st.warning("Parte da embalagem já foi registrada antes do erro; confira o histórico.")
         else:
             st.session_state.pop(trava, None)
+            # a etiqueta vem depois do lançamento já gravado e nunca pode atrapalhá-lo
+            try:
+                st.session_state["etiqueta_contador"] = st.session_state.get("etiqueta_contador", 0) + 1
+                if gerar_etiqueta:
+                    solicitar_etiquetas(
+                        item["COD_PRODUTO"],
+                        item["PRODUTO"],
+                        itens_etiqueta,
+                        chave="embalagem|{}|{}|pendente_apos={}".format(
+                            item["COD_PRODUTO"],
+                            "+".join(f"{i['ordem']}:{i['unidades']}" for i in itens_etiqueta),
+                            maximo_ativo - float(quantidade),
+                        ),
+                    )
+            except Exception:
+                st.toast("A embalagem foi registrada, mas não foi possível preparar a etiqueta.")
             st.success("Embalagem registrada no histórico.")
             st.rerun()
 
@@ -954,6 +986,7 @@ except Exception as exc:
 
 operadores = usuarios_embalagem(usuarios)
 fila = montar_fila_embalagem(historico)
+mostrar_etiquetas_pendentes()
 
 f1, f2 = st.columns([5.6, 1], vertical_alignment="bottom")
 with f1:

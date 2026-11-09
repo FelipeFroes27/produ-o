@@ -8,6 +8,7 @@ import plotly.express as px
 import streamlit as st
 
 from utils.display_mode import ativar_modo_exibicao, page_link_icon, render_menu_lateral, render_sidebar_brand
+from utils.etiqueta_ui import mostrar_etiquetas_pendentes, solicitar_etiquetas
 from utils.sheets import _normalizar, acao_base_historico, acao_etapa_historico, anexar_imagem_base64_observacao, carregar_historico, carregar_ordens, carregar_resumo, carregar_usuarios, lancar_inicio_ordem, lancar_pausa_ordem, lancar_realizacao
 
 
@@ -1192,7 +1193,7 @@ def render_detalhe(ordem, ordens_usuario, modo="consulta"):
             lancamento_em_andamento = bool(st.session_state.get(trava_lancamento, False))
             st.markdown('<div class="completion-box">', unsafe_allow_html=True)
             with st.form(f"form_lancamento_{chave_lancamento}"):
-                qtd_col, flag_col, botao_col = st.columns([1, .65, 1])
+                qtd_col, flag_col, etiqueta_col, botao_col = st.columns([1, .65, .65, 1])
                 with qtd_col:
                     quantidade = st.number_input(
                         "Quantidade realizada agora",
@@ -1208,6 +1209,15 @@ def render_detalhe(ordem, ordens_usuario, modo="consulta"):
                         "Qualidade",
                         key=f"qualidade_{chave_lancamento}",
                         help="Enviar este lançamento para aprovação da qualidade.",
+                    )
+                with etiqueta_col:
+                    st.markdown('<div class="completion-spacer"></div>', unsafe_allow_html=True)
+                    # a chave muda a cada lançamento, então a caixinha sempre volta desmarcada
+                    gerar_etiqueta = st.checkbox(
+                        "Etiqueta",
+                        value=False,
+                        key=f"etiqueta_{chave_lancamento}_{st.session_state.get('etiqueta_contador', 0)}",
+                        help="Gerar uma etiqueta por unidade lançada.",
                     )
                 with botao_col:
                     st.markdown('<div class="completion-spacer"></div>', unsafe_allow_html=True)
@@ -1231,6 +1241,18 @@ def render_detalhe(ordem, ordens_usuario, modo="consulta"):
                 else:
                     st.success("Realização registrada na ordem e no histórico.")
                     st.session_state.pop(trava_lancamento, None)
+                    # a etiqueta vem depois do lançamento já gravado e nunca pode atrapalhá-lo
+                    try:
+                        st.session_state["etiqueta_contador"] = st.session_state.get("etiqueta_contador", 0) + 1
+                        if gerar_etiqueta:
+                            solicitar_etiquetas(
+                                ordem["COD_PRODUTO"],
+                                ordem["PRODUTO"],
+                                [{"ordem": ordem["OP"], "responsavel": ordem["USUARIO_RESPONSAVEL"], "unidades": inteiro(quantidade)}],
+                                chave=f"producao|{ordem['ABA_ORIGEM']}|{ordem['OP']}|{ordem['COD_PRODUTO']}|{ordem['USUARIO_RESPONSAVEL']}|{float(ordem['REALIZADO_NUM']) + float(quantidade)}",
+                            )
+                    except Exception:
+                        st.toast("A realização foi registrada, mas não foi possível preparar a etiqueta.")
                     st.session_state.pop("ordem_selecionada", None)
                     st.session_state.pop("acao_ordem", None)
                     st.rerun()
@@ -1541,6 +1563,8 @@ if not nomes_usuarios:
 
 if "producao_view" not in st.session_state:
     st.session_state.producao_view = "hub"
+
+mostrar_etiquetas_pendentes()
 
 if st.session_state.producao_view == "usuario":
     render_ordens_do_usuario(ordens, nomes_usuarios)

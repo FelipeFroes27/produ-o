@@ -608,6 +608,7 @@ def lancar_conclusao_embalagem(ordem, quantidade, usuario=""):
                 organizar=False,
             )
         organizar_historico()
+    return usuario_inicio
 
 
 def lancar_aprovacao_qualidade(ordem, quantidade_aprovada, avaliador="", embalagem=False):
