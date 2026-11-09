@@ -1,5 +1,6 @@
 import base64
 import io
+import logging
 import threading
 import unicodedata
 from datetime import datetime, timedelta, timezone
@@ -1056,8 +1057,15 @@ def _montar_linha_historico(headers, ordem, quantidade_lancada, acao, avaliador=
 
 
 def organizar_historico():
-    with _SHEETS_LOCK:
-        _organizar_historico_impl()
+    # So deixa o Historico em ordem: os lancamentos ja foram gravados antes. Se falhar
+    # (ex.: limite de leituras do Google), nao pode desfazer nem barrar o lancamento;
+    # as linhas novas ficam no fim da aba (continuam sendo lidas como as mais recentes)
+    # e a proxima organizacao as poe no lugar.
+    try:
+        with _SHEETS_LOCK:
+            _organizar_historico_impl()
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Nao foi possivel organizar o Historico agora: %s", exc)
 
 
 def _organizar_historico_impl():
@@ -1080,9 +1088,11 @@ def _organizar_historico_impl():
         return str(row[indice]).strip() if indice < len(row) else ""
 
     linhas = []
+    originais = []
     largura = len(headers)
     for posicao, row in enumerate(values[1:]):
         row = [str(valor).strip() for valor in row]
+        originais.append(row[:largura] + [""] * max(0, largura - len(row)))
         if not any(row):
             continue
         row = row[:largura] + [""] * max(0, largura - len(row))
@@ -1101,10 +1111,6 @@ def _organizar_historico_impl():
             }
         )
 
-    if not linhas:
-        worksheet.batch_clear(["A2:ZZ"])
-        return
-
     linhas_ordenadas = sorted(
         linhas,
         key=lambda item: (
@@ -1117,8 +1123,17 @@ def _organizar_historico_impl():
         ),
     )
     valores_ordenados = [item["row"] for item in linhas_ordenadas]
-    worksheet.batch_clear(["A2:ZZ"])
-    worksheet.update("A2", valores_ordenados, value_input_option="RAW")
+    if valores_ordenados == originais:
+        return  # ja esta em ordem e sem linhas em branco: nada a gravar
+
+    # Grava por cima, numa unica chamada (as linhas em branco que sobram vao no fim do
+    # bloco). Antes a aba era limpa e so depois reescrita: se algo falhasse entre as
+    # duas etapas, o Historico inteiro ficava vazio.
+    largura_total = max([largura] + [len(row) for row in values])
+    em_branco = [""] * largura_total
+    bloco = [row + [""] * (largura_total - len(row)) for row in valores_ordenados]
+    bloco += [em_branco] * (len(originais) - len(valores_ordenados))
+    worksheet.update(range_name="A2", values=bloco, value_input_option="RAW")
 
 
 def _limpar_dataframe(df):
